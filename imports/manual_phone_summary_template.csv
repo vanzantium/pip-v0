@@ -1,0 +1,9 @@
+# app_name, launches, total_minutes, notifications_received, notifications_dismissed_unread, battery_points
+# Fill this from Settings > Digital Wellbeing and/or Battery usage.
+# battery_points can be a rough 0-30 estimate if Android does not show exact app battery.
+YouTube, 18, 240, 6, 3, 18
+Chrome, 32, 160, 0, 0, 10
+Messages, 45, 55, 60, 35, 3
+TikTok, 22, 25, 8, 7, 6
+Spotify, 8, 360, 0, 0, 12
+Gmail, 14, 35, 20, 14, 2

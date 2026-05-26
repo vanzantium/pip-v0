@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Personal data — never commit
+PipMemory/
+imports/pc_usage_*.json
+imports/phone_upload_*.json
+imports/s25_*.json
+imports/phone_bridge_status.json
+
+# Runtime configuration containing personal paths
+config.json
+
+# Runtime database
+*.sqlite
+
+# Runtime-generated output files (recreated by running the demo)
+after_reject.json
+after_rerun.json
+seq_*.json
+compost_*.json
+resolved_*.json
+skill_dream_result.json
+skill_memory.json
+skill_proposal_card.json
+scenario_results.json
+
+# Conversation / build logs
+reader/
+Pip Build Git Hub_*.txt
+
+# Environment
+.env
