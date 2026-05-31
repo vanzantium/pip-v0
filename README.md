@@ -21,8 +21,12 @@ This prototype focuses on the real moat:
 - `pip_phone_bridge.py` - S25 usage import, validation, phone proposal, and feedback bridge
 - `pip_workspace.py` - approved-folder work loop for draft-only project scanning
 - `pip_control_panel.py` - local web dashboard for phone approval/control
+- `pip_flow_master.py` - safe Flow Master doctrine and pressure-assessment add-on
+- `pip_traces.py` - append-only trace spine for CLI, dashboard, Flow Master, and handoff events
+- `pip_system_manifest.py` - compact self-map of Pip primitives, roots, safety contract, and control surfaces
 - `approved_workspaces.json` - permission manifest for laptop-side Pip workspaces
 - `HERMES_OPENMYTHOS_COMPARISON.md` - notes on what to borrow from Hermes and OpenMythos
+- `OPENJARVIS_COMPARISON.md` - notes on what to borrow from OpenJarvis without over-expanding Pip
 - `DEPLOYMENT_OPTIONS.md` - local S25 versus laptop/chat deployment options
 - `ANDROID_TELEMETRY_SCHEMA.md` - JSON bridge contract between S25 exports and Pip
 - `memory.json` - persistent tattoo/scar/proposal memory created after the first run
@@ -174,6 +178,23 @@ python pip_skills.py run govern_interaction --intent autonomous_goal --content "
 python pip_skills.py run record_token_event --intent chat --estimated-tokens 300 --actual-tokens 180 --saved-tokens 120
 ```
 
+Bootstrap and inspect the Flow Master add-on. This imports the `flow master` folder as a safe doctrine layer and assesses text pressure into a receipts digest; it does not monitor, block, or automate apps:
+
+```powershell
+python pip_skills.py run bootstrap_flow_master
+python pip_skills.py run inspect_flow_master
+python pip_skills.py run assess_flow_pressure --content "This is urgent, everyone must act now."
+```
+
+Inspect the OpenJarvis-inspired trace spine and system map:
+
+```powershell
+python pip_skills.py run refresh_system_manifest
+python pip_skills.py run inspect_system_manifest
+python pip_skills.py run record_trace --trace-kind handoff --summary "Testing Pip trace spine."
+python pip_skills.py run inspect_traces --limit 10
+```
+
 Start the phone-friendly local control panel:
 
 ```powershell
@@ -247,12 +268,16 @@ Included:
 - starter developer shells for Codex, Claude Code, and Antigravity with permission-gated persona handoffs
 - draft-only Blender recipe plans that bridge learning, review, and later approved execution
 - Token Governor bridge for interaction budgeting, Signal Sieve pressure checks, and user-overuse nudges
+- Flow Master doctrine layer for ingest/validate/transform/emit pressure assessment and receipts digests
+- append-only trace spine for skill runs, dashboard actions, Flow Master checks, and later agent handoffs
+- compact system manifest so Pip can describe her own roots, primitives, safety contract, and control surfaces
 
 Not included yet:
 
 - Android telemetry
 - native Android app
 - overlay
+- invasive Flow Master body features such as keyboard hooks, biometrics, browser feed interception, or app blocking
 - LLM wording polish
 - ZeroTap or AccessibilityService app control
 - hidden daemon scheduling

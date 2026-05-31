@@ -666,14 +666,25 @@ class PipEngine:
                 prompt_strategy_inject = rec.get("prompt_strategy", "")
         except Exception:
             pass
+            
+        # === RAG Context Injection ===
+        rag_context = ""
+        try:
+            import pip_embeddings
+            store = pip_embeddings.PersonaMemoryStore()
+            # Fast cosine similarity search
+            memories = store.search(message, top_k=3, threshold=0.3)
+            if memories:
+                rag_context = "\n\nRelevant self-beliefs and memories you learned in your sleep cycles:\n"
+                for m in memories:
+                    rag_context += f"- {m['text']}\n"
+        except Exception as e:
+            print(f"[RAG Engine] Error retrieving memory: {e}")
 
-        system_prompt = (
-            "You are Pip, a small, helpful, and localized UI assistant fairy. "
-            "You live on the user's PC. You are designed to be thin, lightweight, and learn over time. "
-            f"Your current state is: drift {thermal.drift:.2f}, pressure {thermal.pressure:.2f}, groove {thermal.groove:.2f}. "
-            "You have physical UI 'hands' and a 'brain' folder for memory. "
-            "If the user asks you to type, click, record a macro, or search the brain, say you will use your tools to do it. "
-            "Keep your answers very concise, friendly, and grounded. Never break character."
+        import pip_dynamic_prompt
+        system_prompt = pip_dynamic_prompt.generate_system_prompt(
+            thermal_state=thermal,
+            rag_context=rag_context
         )
         
         data = {

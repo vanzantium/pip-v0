@@ -19,6 +19,30 @@ config.json
 # Runtime database
 *.sqlite
 
+# Runtime-generated local UI/review artifacts
+page_output.html
+temp.txt
+ui_review_*.png
+avatar.*
+*.log
+
+# Local scratch probes from manual review
+test_export.py
+test_export2.py
+test_page.py
+test_path.py
+test_rag.py
+skills/dummy_skill/
+
+# Pip memory/state artifacts if the memory folder is pointed inside this repo
+pip memory*/
+pip_traces.jsonl
+pip_system_manifest.json
+pip_scheduler.json
+pip_persona_memory.json
+self_model.json
+finetune_curator.jsonl
+
 # Runtime-generated output files (recreated by running the demo)
 after_reject.json
 after_rerun.json

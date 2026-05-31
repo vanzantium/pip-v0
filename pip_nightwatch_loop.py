@@ -26,18 +26,38 @@ def run_sleep_cycle():
     print("Pip Nightwatch Mode Initiated...")
     engine = PipGoalEngine(max_steps=5)
     
+    # Import embedding tool
+    import pip_embeddings
+    import pip_config
+    import pip_self_reflection
+    memory_store = pip_embeddings.PersonaMemoryStore()
+    
     while True:
+        # 1. Self-Reflection
+        pip_self_reflection.run_reflection_cycle()
+        
+        # 2. Dream Cycle
         target_file = get_random_brain_file()
         if target_file:
             print(f"Pip is dreaming about {target_file.name}...")
+            dream_name = f"dream_{target_file.stem[:10]}.txt"
             goal = f"""You are in a sleep cycle (free play research).
 Please read the file named "{target_file.name}" from the brain.
-Then, write a short summary of what you learned into your own memory folder as a new file called "dream_{target_file.stem[:10]}.txt".
+Then, write a short 1-2 sentence core truth or belief of what you learned into your own memory folder as a new file called "{dream_name}".
 When you are done, use finish_goal.
 """
             try:
                 result = engine.run_goal(goal, yield_logs=True)
                 print(f"Dream cycle finished. Result: {result}")
+                
+                # RAG Integration: Embed the newly created dream
+                mem_path = pip_config.get_memory_path() / dream_name
+                if mem_path.exists():
+                    dream_text = mem_path.read_text(encoding="utf-8").strip()
+                    if dream_text:
+                        print(f"Embedding dream into Persona Memory: {dream_text[:50]}...")
+                        memory_store.add_memory(dream_text)
+                
             except Exception as e:
                 print(f"Dream cycle failed: {e}")
                 

@@ -32,8 +32,10 @@ class PipGoalEngine:
                 print(message)
 
         model = self.get_hardware_model()
-        system_prompt = f"""You are Pip, an autonomous AI agent living on the user's PC.
-You are running in autonomous /goal mode. Your goal is: {goal}
+        import pip_dynamic_prompt
+        base_role = f"You are Pip, an autonomous AI agent living on the user's PC.\nYou are running in autonomous /goal mode. Your goal is: {goal}"
+        system_prompt = pip_dynamic_prompt.generate_system_prompt(role_override=base_role)
+        system_prompt += f"""
 
 You have the following tools available. To use a tool, you MUST output ONLY valid JSON in this exact format:
 {{

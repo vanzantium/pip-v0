@@ -7,6 +7,7 @@ import json
 import socket
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
@@ -29,10 +30,14 @@ from pip_workspace import (
 from pip_safety import request_safety_permission
 import pip_app_skills
 import pip_blender_recipes
+import pip_flow_master
 import pip_jobs
+import pip_scheduler
 import pip_platform
+import pip_system_manifest
 import pip_token_guard
-
+import pip_traces
+import pip_background_tasks
 
 class QuietThreadingHTTPServer(ThreadingHTTPServer):
     def handle_error(self, request: object, client_address: tuple[str, int]) -> None:
@@ -52,6 +57,29 @@ def local_ip() -> str:
             return sock.getsockname()[0]
     except OSError:
         return "127.0.0.1"
+
+
+def start_nightwatch_loop() -> dict[str, Any]:
+    import subprocess
+
+    nw_path = Path(__file__).resolve().parent / "pip_nightwatch_loop.py"
+    if not nw_path.exists():
+        return {"ok": False, "message": "pip_nightwatch_loop.py not found."}
+    subprocess.Popen(
+        [sys.executable, str(nw_path)],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        stdin=subprocess.DEVNULL,
+        **pip_platform.hidden_subprocess_kwargs(),
+    )
+    return {"ok": True, "message": "Nightwatch background loop started."}
+
+
+def _safe_form_int(form: dict[str, list[str]], key: str, default: int = -1) -> int:
+    try:
+        return int((form.get(key) or [str(default)])[0])
+    except (TypeError, ValueError):
+        return default
 
 
 def page(status: dict[str, Any]) -> str:
@@ -226,6 +254,43 @@ def page(status: dict[str, Any]) -> str:
     if not gov_events:
         gov_events = "<p class='small'>No token events recorded yet.</p>"
 
+    flow = pip_flow_master.inspect_flow_master()
+    flow_latest = flow.get("latest_assessment") or {}
+    flow_state = html.escape(flow_latest.get("flow_state") or "STAND")
+    flow_pressure = flow_latest.get("composite_threat_score")
+    flow_pressure_text = "not assessed" if flow_pressure is None else f"{int(float(flow_pressure) * 100)}%"
+    flow_digest = flow_latest.get("receipts_digest") or {}
+    flow_action = html.escape(flow_digest.get("action") or "Run a Flow check to convert pressure into a receipts digest.")
+    flow_summary = html.escape((flow_latest.get("signal") or {}).get("triage_summary") or "No Flow Master assessment yet.")
+    flow_sources = flow.get("source_files", [])
+    flow_source_text = f"{len(flow_sources)} source files found" if flow_sources else "Flow Master source folder not found"
+
+    trace_status = pip_traces.inspect_traces(limit=5)
+    trace_events = trace_status.get("latest", [])
+    trace_html = ""
+    for event in reversed(trace_events):
+        event_kind = html.escape(event.get("kind", "event"))
+        event_status = html.escape(event.get("status", "ok"))
+        event_action = html.escape(event.get("action", ""))
+        event_summary = html.escape(event.get("summary", ""))
+        event_at = html.escape(event.get("at", ""))
+        trace_html += f"""
+        <div style="margin-bottom:10px;padding:10px;background:rgba(255,255,255,.58);border-radius:10px;">
+          <p class="small" style="margin:0 0 4px 0;"><strong>{event_kind}</strong> | {event_status} | {event_action}</p>
+          <p class="small" style="margin:0 0 4px 0;">{event_summary}</p>
+          <p class="small" style="margin:0;">{event_at}</p>
+        </div>
+        """
+    if not trace_html:
+        trace_html = "<p class='small'>No trace events yet. Pip will start leaving receipts as skills and dashboard actions run.</p>"
+
+    system_status = pip_system_manifest.inspect_manifest(refresh=False)
+    system_manifest = system_status.get("manifest") or {}
+    system_primitives = system_manifest.get("primitives") or {}
+    system_manifest_path = html.escape(system_status.get("manifest_path", ""))
+    primitive_names = ", ".join(name.replace("_", " ") for name in system_primitives.keys())
+    primitive_text = html.escape(primitive_names or "Manifest not generated yet.")
+
     platform_status = pip_platform.feature_status()
     platform_features = platform_status.get("features", {})
     platform_html = ""
@@ -248,15 +313,100 @@ def page(status: dict[str, Any]) -> str:
         )
         guidance = shell.get("handoff_guidance", ["Keep handoffs scoped and permission-gated."])[0]
         shell_cards += f"""
-        <div style="margin-bottom:12px;padding:12px;background:rgba(255,255,255,.62);border-radius:12px;border:1px solid rgba(92,111,67,.25);">
-          <p style="margin:0 0 6px 0;"><strong>{html.escape(shell.get('name', 'Developer Shell'))}</strong></p>
-          <p class="small" style="margin:0 0 6px 0;">Lvl {shell.get('level', 1)} ({shell.get('xp', 0)}xp) | persona: {html.escape(shell.get('persona', ''))}</p>
-          <p class="small" style="margin:0 0 6px 0;">{html.escape(shell.get('role', 'developer tool'))}</p>
-          <p class="small" style="margin:0;">{html.escape(domain_labels or guidance)}</p>
-        </div>
+      <div style="background: var(--clay); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; padding: 10px; margin-bottom: 8px;">
+        <strong>{html.escape(shell['name'])}</strong> <span class="small" style="color:var(--text-muted);">&middot; {html.escape(shell.get('engine', 'Local Model'))}</span>
+        <p class="small" style="margin-top:4px;">"{html.escape(shell.get('role', ''))}"</p>
+        <p class="small" style="margin-top:4px; font-family:monospace; color:var(--text-muted);">Persona: {html.escape(shell.get('persona', ''))}</p>
+      </div>
         """
     if not shell_cards:
-        shell_cards = "<p class='small'>Developer shells have not been bootstrapped yet.</p>"
+        shell_cards = "<p class='small'>No developer shells generated. Click bootstrap below.</p>"
+
+    scheduler_status = pip_scheduler.get_status()
+    jobs = scheduler_status.get("jobs", [])
+    scheduler_html = ""
+    for job in jobs:
+        scheduler_html += f"""
+        <div style="background: var(--clay); border-radius: 8px; padding: 10px; margin-bottom: 8px;">
+            <strong>{html.escape(job.get('name', 'Job'))}</strong> <span class="small pill">{html.escape(job.get('status', 'unknown'))}</span>
+            <p class="small" style="margin-top: 4px;">{html.escape(job.get('goal', ''))}</p>
+            <div class="actions" style="margin-top: 8px;">
+                <form method="post" action="/scheduler/pause?id={html.escape(job['id'])}" style="display:inline;">
+                    <button class="quiet" style="padding: 4px 8px; font-size: 11px;">Pause</button>
+                </form>
+                <form method="post" action="/scheduler/resume?id={html.escape(job['id'])}" style="display:inline;">
+                    <button class="quiet" style="padding: 4px 8px; font-size: 11px;">Resume</button>
+                </form>
+            </div>
+        </div>
+        """
+    if not scheduler_html:
+        scheduler_html = "<p class='small'>No jobs scheduled.</p>"
+
+    scripts_html = ""
+    try:
+        import pip_background_tasks
+        scripts = pip_background_tasks.list_scripts()
+        for script in scripts:
+            name = html.escape(script.get('name', ''))
+            scripts_html += f"""
+            <div style="background: rgba(255,255,255,0.6); border: 1px solid rgba(92,111,67,0.3); border-radius: 8px; padding: 10px; margin-bottom: 8px;">
+                <strong>{name}</strong>
+                <div class="actions" style="margin-top: 8px;">
+                    <form method="post" action="/scripts/run" style="display:inline;">
+                        <input type="hidden" name="script" value="{name}">
+                        <input type="hidden" name="silent" value="false">
+                        <button class="quiet" style="padding: 4px 8px; font-size: 11px;">Run Tracked</button>
+                    </form>
+                    <form method="post" action="/scripts/run" style="display:inline;">
+                        <input type="hidden" name="script" value="{name}">
+                        <input type="hidden" name="silent" value="true">
+                        <button class="quiet" style="padding: 4px 8px; font-size: 11px;">Run Silent</button>
+                    </form>
+                </div>
+            </div>
+            """
+    except Exception as e:
+        scripts_html = f"<p class='small'>Error loading scripts: {e}</p>"
+    if not scripts_html:
+        scripts_html = "<p class='small'>No background scripts found in pip-v0/scripts.</p>"
+
+    import pip_self_model
+    self_model_data = pip_self_model.load_self_model()
+    self_model_html = ""
+    
+    beliefs = self_model_data.get("beliefs", [])
+    if beliefs:
+        self_model_html += "<h4>Beliefs</h4><ul style='padding-left:20px;'>"
+        for i, b in enumerate(beliefs):
+            self_model_html += f"""
+            <li style="margin-bottom:8px;">
+              {html.escape(b)}
+              <form method="post" action="/self-model/prune-belief" style="display:inline; margin-left:8px;">
+                <input type="hidden" name="index" value="{i}">
+                <button type="submit" class="quiet" style="padding:2px 6px; font-size:10px; color:#ef4444; border-color:#ef4444;">Prune</button>
+              </form>
+            </li>
+            """
+        self_model_html += "</ul>"
+        
+    rules = self_model_data.get("learned_rules", [])
+    if rules:
+        self_model_html += "<h4>Learned Rules</h4><ul style='padding-left:20px;'>"
+        for i, r in enumerate(rules):
+            self_model_html += f"""
+            <li style="margin-bottom:8px;">
+              {html.escape(r)}
+              <form method="post" action="/self-model/prune-rule" style="display:inline; margin-left:8px;">
+                <input type="hidden" name="index" value="{i}">
+                <button type="submit" class="quiet" style="padding:2px 6px; font-size:10px; color:#ef4444; border-color:#ef4444;">Prune</button>
+              </form>
+            </li>
+            """
+        self_model_html += "</ul>"
+        
+    if not beliefs and not rules:
+        self_model_html = "<p class='small' style='color:var(--text-muted);'>No beliefs or rules have been extracted yet.</p>"
 
     return f"""<!doctype html>
 <html lang="en">
@@ -351,7 +501,7 @@ def page(status: dict[str, Any]) -> str:
 <body>
 <main>
   <section class="hero">
-    <span class="pill">Status: {{html.escape(status_label)}}</span>
+    <span class="pill">Status: {html.escape(status_label)}</span>
     <h1>Pip's Digital Tavern</h1>
     <p>Your local assistant. Pip handles the small things so you don't have to.</p>
     <p style="margin-top:16px">
@@ -367,7 +517,7 @@ def page(status: dict[str, Any]) -> str:
 
   <section class="card">
     <h2>Current Thoughts</h2>
-    <p><strong>{{html.escape(proposal_text)}}</strong></p>
+    <p><strong>{html.escape(proposal_text)}</strong></p>
     <div class="actions">
       <form method="post" action="/run-scan">
         <button type="submit">Run Memory Scan</button>
@@ -390,6 +540,14 @@ def page(status: dict[str, Any]) -> str:
   </section>
 
   <section class="card">
+    <h2>Supervised Scheduler</h2>
+    <p class="small">Pip's ambient and long-running tasks queue.</p>
+    <div class="scroll-box" style="max-height: 250px;">
+      {scheduler_html}
+    </div>
+  </section>
+
+  <section class="card">
     <h2>Token Governor</h2>
     <span class="pill">Mode: {gov_mode}</span>
     <span class="pill">Daily remaining: {gov_pct}%</span>
@@ -398,6 +556,45 @@ def page(status: dict[str, Any]) -> str:
     <div class="scroll-box" style="max-height:150px;">
       {gov_events}
     </div>
+  </section>
+
+  <section class="card">
+    <h2>Flow Master</h2>
+    <span class="pill">State: {flow_state}</span>
+    <span class="pill">Pressure: {flow_pressure_text}</span>
+    <p class="small"><strong>Contract:</strong> ingest -&gt; validate -&gt; transform -&gt; emit</p>
+    <p class="small"><strong>Digest:</strong> {flow_action}</p>
+    <p class="small"><strong>Signal:</strong> {flow_summary}</p>
+    <p class="small">{html.escape(flow_source_text)}. This v0 layer assesses text pressure only; it does not monitor or block apps.</p>
+    <form method="post" action="/flow-master/assess">
+      <p><textarea name="content" placeholder="Paste a post, thought, task, or prompt to assess pressure..." style="width:100%;height:70px;border-radius:8px;padding:8px;"></textarea></p>
+      <div class="actions">
+        <button class="quiet" type="submit">Run Flow Check</button>
+      </div>
+    </form>
+    <form method="post" action="/flow-master/bootstrap" style="margin-top:10px;">
+      <button class="secondary" type="submit">Refresh Flow Doctrine</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2>Trace Spine</h2>
+    <span class="pill">Events: {trace_status.get('total_events', 0)}</span>
+    <span class="pill">Append-only</span>
+    <p class="small">Recent receipts from CLI runs, dashboard actions, Flow Master checks, and future handoffs.</p>
+    <div class="scroll-box" style="max-height:220px;">
+      {trace_html}
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>System Map</h2>
+    <p class="small">Pip's compact self-description: roots, safety contract, primitives, and control surfaces.</p>
+    <p class="small"><strong>Primitives:</strong> {primitive_text}</p>
+    <p class="small" style="word-break:break-all;">{system_manifest_path}</p>
+    <form method="post" action="/system-manifest/refresh" style="margin-top:10px;">
+      <button class="quiet" type="submit">Refresh System Map</button>
+    </form>
   </section>
 
   <section class="card">
@@ -500,6 +697,24 @@ def page(status: dict[str, Any]) -> str:
   </section>
 
   <section class="card">
+    <h2>Nightwatch (Free Play)</h2>
+    <p class="small">Let Pip securely explore, run sleep cycles, and self-reflect in the background.</p>
+    <div class="actions">
+      <form method="post" action="/nightwatch/start">
+        <button class="secondary" type="submit">Start Sleep Cycle</button>
+      </form>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Efficiency Scripts</h2>
+    <p class="small">Background python routines. Tracked scripts appear in Running Jobs. Silent scripts run fully detached.</p>
+    <div class="scroll-box" style="max-height: 250px;">
+      {scripts_html}
+    </div>
+  </section>
+
+  <section class="card">
     <h2>Pip's Memory Folder</h2>
     <p>Pip stores all her thoughts, drafts, and JSON files in a dedicated local folder. You can safely open and edit these files at any time.</p>
     <div style="background: rgba(255,255,255,0.6); padding: 10px; border-radius: 8px; border: 1px solid rgba(92,111,67,0.3); font-family: monospace; word-break: break-all; margin-bottom: 15px;">
@@ -511,6 +726,12 @@ def page(status: dict[str, Any]) -> str:
       </div>
     </form>
   </section>
+  <section class="card">
+    <h2>Pip's Self-Model (Beliefs & Rules)</h2>
+    <p class="small">Pip learns from her interactions. You can prune incorrect beliefs here to teach her lessons.</p>
+    {self_model_html}
+  </section>
+
 </main>
 </body>
 </html>"""
@@ -930,6 +1151,31 @@ class PipHandler(BaseHTTPRequestHandler):
         body = self.rfile.read(length).decode("utf-8") if length else ""
         return parse_qs(body)
 
+    def trace_dashboard_action(
+        self,
+        action: str,
+        summary: str,
+        status: str = "ok",
+        details: dict[str, Any] | None = None,
+    ) -> None:
+        try:
+            pip_traces.record_trace(
+                kind="dashboard_action",
+                actor="phone_dashboard",
+                action=action,
+                status=status,
+                summary=summary,
+                details={
+                    "client": self.client_address[0] if self.client_address else "",
+                    **(details or {}),
+                },
+                source="pip_control_panel",
+                workspace=self.workspace_key,
+                tags=["dashboard", action],
+            )
+        except Exception as exc:
+            print(f"Trace write failed: {exc}")
+
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
         try:
@@ -961,6 +1207,8 @@ class PipHandler(BaseHTTPRequestHandler):
             elif parsed.path == "/permissions":
                 status = export_control_status(self.workspace_key, self.manifest_path)
                 self.send_json(status.get("permissions") or {})
+            elif parsed.path == "/scheduler/status":
+                self.send_json(pip_scheduler.get_status())
             elif parsed.path == "/jobs":
                 self.send_json(pip_jobs.list_jobs())
             elif parsed.path == "/app-skills":
@@ -971,6 +1219,12 @@ class PipHandler(BaseHTTPRequestHandler):
                 self.send_json(pip_blender_recipes.list_recipes())
             elif parsed.path == "/token-governor":
                 self.send_json(pip_token_guard.status())
+            elif parsed.path == "/flow-master":
+                self.send_json(pip_flow_master.inspect_flow_master())
+            elif parsed.path == "/traces":
+                self.send_json(pip_traces.inspect_traces(limit=50))
+            elif parsed.path == "/system-manifest":
+                self.send_json(pip_system_manifest.inspect_manifest(refresh=False))
             elif parsed.path == "/platform":
                 self.send_json(pip_platform.feature_status())
             elif parsed.path == "/phone/status":
@@ -1033,6 +1287,8 @@ class PipHandler(BaseHTTPRequestHandler):
             else:
                 self.send_json({"error": "not found"}, status=404)
         except Exception as exc:
+            import traceback
+            traceback.print_exc()
             self.send_json({"error": str(exc)}, status=500)
 
     def do_POST(self) -> None:
@@ -1040,10 +1296,22 @@ class PipHandler(BaseHTTPRequestHandler):
         try:
             if parsed.path == "/run-scan":
                 draft_next_actions(self.workspace_key, self.manifest_path)
+                self.trace_dashboard_action("run_scan", "Dashboard requested a workspace scan and next-action draft.")
+                self.redirect_home()
+            elif parsed.path == "/scheduler/pause":
+                query = parse_qs(parsed.query)
+                if "id" in query:
+                    pip_scheduler.pause_job(query["id"][0])
+                self.redirect_home()
+            elif parsed.path == "/scheduler/resume":
+                query = parse_qs(parsed.query)
+                if "id" in query:
+                    pip_scheduler.resume_job(query["id"][0])
                 self.redirect_home()
             elif parsed.path == "/run-goal":
                 form = self.read_body()
                 goal_text = form.get("goal_text", [""])[0]
+                trace_status = "empty"
                 if goal_text:
                     assessment = pip_token_guard.assess_interaction(
                         goal_text,
@@ -1060,6 +1328,7 @@ class PipHandler(BaseHTTPRequestHandler):
                             manifest_path=self.manifest_path,
                             details={"goal": goal_text, "source": "dashboard", "token_governor": assessment},
                         )
+                        trace_status = "permission_requested"
                     else:
                         pip_token_guard.record_event(
                             "autonomous_goal",
@@ -1068,17 +1337,133 @@ class PipHandler(BaseHTTPRequestHandler):
                             saved_tokens=assessment["estimated_tokens"],
                             note=f"Blocked by Token Governor: {assessment['reason']}",
                         )
+                        trace_status = "blocked"
+                    self.trace_dashboard_action(
+                        "run_goal",
+                        "Dashboard submitted an autonomous goal for governor review.",
+                        status=trace_status,
+                        details={"goal": goal_text[:240], "allowed": assessment["allowed"]},
+                    )
+                self.redirect_home()
+            elif parsed.path == "/nightwatch/start":
+                request_safety_permission(
+                    "nightwatch_start",
+                    title="Approve Nightwatch sleep cycle",
+                    rationale="Nightwatch starts a long-running background loop that may read memory files, call local models, and write dream/reflection memory.",
+                    workspace_key=self.workspace_key,
+                    manifest_path=self.manifest_path,
+                    details={"source": "dashboard"},
+                )
+                self.trace_dashboard_action(
+                    "nightwatch_start",
+                    "Dashboard requested Nightwatch approval.",
+                    status="permission_requested",
+                )
+                self.redirect_home()
+            elif parsed.path == "/scripts/run":
+                form = self.read_body()
+                script_name = (form.get("script") or [""])[0]
+                silent_val = (form.get("silent") or ["false"])[0].lower() == "true"
+                if script_name:
+                    request_safety_permission(
+                        "efficiency_script",
+                        title=f"Approve efficiency script: {script_name}",
+                        rationale="Dashboard script execution can run local Python code and must be approved before it starts.",
+                        workspace_key=self.workspace_key,
+                        manifest_path=self.manifest_path,
+                        details={"script": script_name, "silent": silent_val, "source": "dashboard"},
+                    )
+                    self.trace_dashboard_action(
+                        "script_run",
+                        "Dashboard requested script execution approval.",
+                        status="permission_requested",
+                        details={"script": script_name, "silent": silent_val},
+                    )
+                self.redirect_home()
+            elif parsed.path == "/self-model/prune-belief":
+                form = self.read_body()
+                idx = _safe_form_int(form, "index")
+                if idx >= 0:
+                    import pip_self_model
+                    import pip_finetune_curator
+                    import pip_dynamic_prompt
+                    
+                    data = pip_self_model.load_self_model()
+                    beliefs = data.get("beliefs", [])
+                    if idx < len(beliefs):
+                        bad_belief = beliefs[idx]
+                        pip_self_model.remove_belief(idx)
+                        
+                        # Create lesson artifact
+                        lesson_text = f"I previously believed: '{bad_belief}', but the user pruned this. I must learn from this mistake and avoid adopting similar beliefs."
+                        pip_finetune_curator.append_interaction(
+                            instruction=f"Evaluate this pruned belief: {bad_belief}",
+                            system_prompt=pip_dynamic_prompt.generate_system_prompt(),
+                            response_text=lesson_text,
+                            source="user_correction"
+                        )
+                self.redirect_home()
+            elif parsed.path == "/self-model/prune-rule":
+                form = self.read_body()
+                idx = _safe_form_int(form, "index")
+                if idx >= 0:
+                    import pip_self_model
+                    import pip_finetune_curator
+                    import pip_dynamic_prompt
+                    
+                    data = pip_self_model.load_self_model()
+                    rules = data.get("learned_rules", [])
+                    if idx < len(rules):
+                        bad_rule = rules[idx]
+                        pip_self_model.remove_rule(idx)
+                        
+                        # Create lesson artifact
+                        lesson_text = f"I previously adopted the rule: '{bad_rule}', but the user rejected it. I must learn from this mistake."
+                        pip_finetune_curator.append_interaction(
+                            instruction=f"Evaluate this pruned rule: {bad_rule}",
+                            system_prompt=pip_dynamic_prompt.generate_system_prompt(),
+                            response_text=lesson_text,
+                            source="user_correction"
+                        )
                 self.redirect_home()
             elif parsed.path == "/apps/scan":
                 import pip_app_scanner
                 pip_app_scanner.scan_and_save()
+                self.trace_dashboard_action("apps_scan", "Dashboard scanned installed apps.")
                 self.redirect_home()
             elif parsed.path == "/hardware/scan":
                 import pip_hardware_scanner
                 pip_hardware_scanner.scan_and_save(optimize=False)
+                self.trace_dashboard_action("hardware_scan", "Dashboard scanned hardware.")
                 self.redirect_home()
             elif parsed.path == "/developer-shells/bootstrap":
                 pip_app_skills.bootstrap_developer_shells(write_personas=True)
+                self.trace_dashboard_action("developer_shells_bootstrap", "Dashboard refreshed developer shell profiles.")
+                self.redirect_home()
+            elif parsed.path == "/flow-master/bootstrap":
+                pip_flow_master.save_doctrine()
+                self.trace_dashboard_action("flow_master_bootstrap", "Dashboard refreshed Flow Master doctrine.")
+                self.redirect_home()
+            elif parsed.path == "/flow-master/assess":
+                form = self.read_body()
+                content = (form.get("content") or [""])[0]
+                if content:
+                    assessment = pip_flow_master.assess_flow_pressure(
+                        content,
+                        intent="dashboard_flow_check",
+                        source_type="first_hand",
+                        source_name="Pip dashboard Flow Master",
+                    )
+                    self.trace_dashboard_action(
+                        "flow_master_assess",
+                        "Dashboard ran a Flow Master pressure check.",
+                        status=assessment.get("flow_state", "ok").lower(),
+                        details={"flow_state": assessment.get("flow_state"), "pressure": assessment.get("composite_threat_score")},
+                    )
+                self.redirect_home()
+            elif parsed.path == "/system-manifest/refresh":
+                pip_system_manifest.save_manifest()
+                self.trace_dashboard_action("system_manifest_refresh", "Dashboard refreshed Pip's system map.")
                 self.redirect_home()
             elif parsed.path == "/save-apps":
                 form = self.read_body()
@@ -1088,6 +1473,7 @@ class PipHandler(BaseHTTPRequestHandler):
                     field_name = f"app_{app['name']}"
                     app['enabled'] = field_name in form
                 pip_evolution.save_apps(apps)
+                self.trace_dashboard_action("save_apps", "Dashboard saved approved app toggles.")
                 self.redirect_home()
             elif parsed.path == "/select-folder":
                 if not pip_platform.is_windows():
@@ -1113,6 +1499,7 @@ if ($f.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                     if out:
                         import pip_config
                         pip_config.set_memory_path(out)
+                        self.trace_dashboard_action("select_folder", "Dashboard changed Pip memory folder.", details={"path": out})
                 except Exception as e:
                     print(f"Folder selection error: {e}")
                 self.redirect_home()
@@ -1130,15 +1517,23 @@ if ($f.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                         saved_tokens=assessment["estimated_tokens"],
                         note=f"Blocked by Token Governor: {assessment['reason']}",
                     )
+                self.trace_dashboard_action(
+                    "run_ambient",
+                    "Dashboard requested an ambient cycle.",
+                    status="ok" if assessment["allowed"] else "blocked",
+                    details={"allowed": assessment["allowed"]},
+                )
                 self.redirect_home()
             elif parsed.path == "/schedule":
                 queue_next_wake(self.workspace_key, 30, "Phone-scheduled Garden Spiders ambient cycle.", self.manifest_path)
+                self.trace_dashboard_action("schedule", "Dashboard scheduled the next ambient wake.")
                 self.redirect_home()
             elif parsed.path == "/feedback":
                 form = self.read_body()
                 status = (form.get("status") or [""])[0]
                 note = (form.get("note") or [""])[0]
                 record_feedback(self.workspace_key, status, note, self.manifest_path)
+                self.trace_dashboard_action("feedback", "Dashboard recorded proposal feedback.", status=status or "ok")
                 self.redirect_home()
             elif parsed.path == "/permission":
                 form = self.read_body()
@@ -1150,11 +1545,25 @@ if ($f.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                     goal_text = (resolved.get("details") or {}).get("goal") or resolved.get("rationale", "")
                     if goal_text:
                         pip_jobs.start_autonomous_goal(goal_text)
+                elif decision == "approved" and resolved.get("action_type") == "nightwatch_start":
+                    start_nightwatch_loop()
+                elif decision == "approved" and resolved.get("action_type") == "efficiency_script":
+                    details = resolved.get("details") or {}
+                    script_name = details.get("script", "")
+                    if script_name:
+                        pip_background_tasks.run_script(script_name, silent=bool(details.get("silent")))
+                self.trace_dashboard_action(
+                    "permission",
+                    "Dashboard resolved a permission request.",
+                    status=decision or "ok",
+                    details={"request_id": request_id, "action_type": resolved.get("action_type")},
+                )
                 self.redirect_home()
             elif parsed.path == "/jobs/stop":
                 form = self.read_body()
                 job_id = (form.get("job_id") or [""])[0]
                 pip_jobs.request_stop(job_id)
+                self.trace_dashboard_action("jobs_stop", "Dashboard requested a cooperative job stop.", details={"job_id": job_id})
                 self.redirect_home()
             elif parsed.path == "/app-skills/award":
                 form = self.read_body()
@@ -1164,6 +1573,7 @@ if ($f.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                     domain=(form.get("domain") or ["general"])[0],
                     evidence=(form.get("evidence") or [""])[0],
                 )
+                self.trace_dashboard_action("app_skills_award", "Dashboard awarded app skill XP.")
                 self.redirect_home()
             elif parsed.path == "/blender/recipe-draft":
                 form = self.read_body()
@@ -1187,6 +1597,12 @@ if ($f.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                         saved_tokens=assessment["estimated_tokens"],
                         note=f"Blocked by Token Governor: {assessment['reason']}",
                     )
+                self.trace_dashboard_action(
+                    "blender_recipe_draft",
+                    "Dashboard requested a Blender recipe draft.",
+                    status="ok" if assessment["allowed"] else "blocked",
+                    details={"recipe": recipe, "project": project, "allowed": assessment["allowed"]},
+                )
                 self.redirect_home()
             elif parsed.path == "/phone/usage-import":
                 content_type = self.headers.get("Content-Type", "")
@@ -1197,6 +1613,7 @@ if ($f.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                     form = self.read_body()
                     usage_json = (form.get("usage_json") or [""])[0]
                 import_phone_usage_text(usage_json, "dashboard_upload.json", run_optimizer=True)
+                self.trace_dashboard_action("phone_usage_import", "Dashboard imported phone usage JSON.")
                 self.redirect_home()
             elif parsed.path == "/pc/usage-import":
                 content_type = self.headers.get("Content-Type", "")
@@ -1207,17 +1624,20 @@ if ($f.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                     form = self.read_body()
                     usage_json = (form.get("usage_json") or [""])[0]
                 import_pc_usage_text(usage_json, "pc_dashboard_upload.json", run_optimizer=True)
+                self.trace_dashboard_action("pc_usage_import", "Dashboard imported PC usage JSON.")
                 self.redirect_home()
             elif parsed.path == "/phone/summary-import":
                 form = self.read_body()
                 summary_csv = (form.get("summary_csv") or [""])[0]
                 import_manual_summary_text(summary_csv, "dashboard_manual_summary.csv")
+                self.trace_dashboard_action("phone_summary_import", "Dashboard imported phone summary CSV.")
                 self.redirect_home()
             elif parsed.path == "/phone/feedback":
                 form = self.read_body()
                 feedback = (form.get("feedback") or [""])[0]
                 note = (form.get("note") or [""])[0]
                 apply_phone_feedback(feedback, note)
+                self.trace_dashboard_action("phone_feedback", "Dashboard recorded phone proposal feedback.", status=feedback or "ok")
                 self.redirect_home()
             elif parsed.path == "/chat":
                 form = self.read_body()

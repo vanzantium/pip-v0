@@ -274,6 +274,32 @@ def inspect_developer_shells(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
+def refresh_system_manifest(args: argparse.Namespace) -> dict[str, Any]:
+    import pip_system_manifest
+    return {
+        "skill": "refresh_system_manifest",
+        "status": pip_system_manifest.inspect_manifest(refresh=True),
+    }
+
+
+def inspect_model_registry(args: argparse.Namespace) -> dict[str, Any]:
+    import pip_model_registry
+    return {
+        "skill": "inspect_model_registry",
+        "registry": pip_model_registry.get_registry(),
+    }
+
+
+def route_model_task(args: argparse.Namespace) -> dict[str, Any]:
+    import pip_model_registry
+    return pip_model_registry.run_route(args)
+
+
+def list_skill_packages(args: argparse.Namespace) -> dict[str, Any]:
+    import pip_skill_registry
+    return pip_skill_registry.list_skill_packages()
+
+
 def list_blender_recipes(args: argparse.Namespace) -> dict[str, Any]:
     import pip_blender_recipes
     return {
@@ -521,20 +547,6 @@ def run_pc_optimizer(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
-def search_brain(args: argparse.Namespace) -> dict[str, Any]:
-    query = (getattr(args, "query", "") or "")
-    try:
-        import pip_hound
-        results = pip_hound.search(query)
-        return {
-            "skill": "search_brain",
-            "ok": True,
-            "query": query,
-            "matches": len(results),
-            "results": results
-        }
-    except Exception as e:
-        return {"skill": "search_brain", "ok": False, "message": str(e)}
 
 def assess_hardware(args: argparse.Namespace) -> dict[str, Any]:
     try:
@@ -559,45 +571,6 @@ def generate_capsule(args: argparse.Namespace) -> dict[str, Any]:
     except Exception as e:
         return {"skill": "generate_capsule", "ok": False, "message": str(e)}
 
-def read_brain_file(args: argparse.Namespace) -> dict[str, Any]:
-    import pip_config
-    brain_dir = pip_config.get_memory_path()
-    target = getattr(args, "filename", "")
-    results = list(brain_dir.rglob(target))
-    if not results:
-        return {"skill": "read_brain_file", "ok": False, "message": "File not found"}
-    
-    try:
-        content = results[0].read_text(encoding="utf-8")
-        return {
-            "skill": "read_brain_file",
-            "ok": True,
-            "filename": results[0].name,
-            "content": content[:5000] # Truncate to avoid memory blowup
-        }
-    except Exception as e:
-        return {"skill": "read_brain_file", "ok": False, "message": str(e)}
-
-def write_brain_file(args: argparse.Namespace) -> dict[str, Any]:
-    import pip_config
-    brain_dir = pip_config.get_memory_path().resolve()
-    target = (brain_dir / getattr(args, "filename", "new_brain_file.txt")).resolve()
-    
-    if not target.is_relative_to(brain_dir):
-        return {"skill": "write_brain_file", "ok": False, "message": "Security Error: Attempted to write outside the Pip memory sandbox."}
-        
-    if target.suffix not in [".txt", ".json", ".md", ".py"]:
-        target = target.with_suffix(".txt")
-        
-    try:
-        mode = "a" if target.exists() else "w"
-        with open(target, mode, encoding="utf-8") as f:
-            if mode == "a":
-                f.write("\n")
-            f.write(getattr(args, "content", ""))
-        return {"skill": "write_brain_file", "ok": True, "filename": target.name}
-    except Exception as e:
-        return {"skill": "write_brain_file", "ok": False, "message": str(e)}
 
 def run_python_script(args: argparse.Namespace) -> dict[str, Any]:
     import pip_safety
@@ -739,38 +712,6 @@ def hands_click_mouse(args: argparse.Namespace) -> dict[str, Any]:
         return {"skill": "hands_click_mouse", "ok": True}
     return {"skill": "hands_click_mouse", "ok": False, "message": "Click failed."}
 
-def record_new_macro(args: argparse.Namespace) -> dict[str, Any]:
-    import pip_safety
-    blocked = pip_safety.gate_skill(
-        "record_new_macro",
-        args,
-        "Pip wants to record keyboard events until Escape is pressed.",
-    )
-    if blocked:
-        return blocked
-
-    try:
-        import pip_hands
-    except ImportError:
-        return {"skill": "record_new_macro", "ok": False, "message": "pip_hands module not found."}
-    
-    from pathlib import Path
-    import json
-    
-    events = pip_hands.record_macro(stop_key='esc')
-    if not events:
-        return {"skill": "record_new_macro", "ok": False, "message": "No events recorded or recording failed."}
-        
-    import pip_config
-    import re
-    brain_dir = pip_config.get_memory_path()
-    name = re.sub(r"[^A-Za-z0-9_.-]+", "_", getattr(args, "name", "macro")).strip("._")
-    if not name:
-        name = "macro"
-    target = brain_dir / f"macro_{name}.json"
-    target.write_text(json.dumps(events, indent=2), encoding="utf-8")
-    
-    return {"skill": "record_new_macro", "ok": True, "filename": target.name, "event_count": len(events)}
 
 
 SKILLS: dict[str, tuple[SkillSpec, Callable[[argparse.Namespace], dict[str, Any]]]] = {
@@ -874,6 +815,46 @@ SKILLS: dict[str, tuple[SkillSpec, Callable[[argparse.Namespace], dict[str, Any]
         ),
         record_blender_recipe_result,
     ),
+    "refresh_system_manifest": (
+        SkillSpec(
+            name="refresh_system_manifest",
+            description="Regenerate Pip's compact self-map of primitives, roots, safety contract, and control surfaces.",
+            inputs=[],
+            outputs=["updated pip_system_manifest.json"],
+            permissions=["write memory folder"],
+        ),
+        refresh_system_manifest,
+    ),
+    "inspect_model_registry": (
+        SkillSpec(
+            name="inspect_model_registry",
+            description="Inspect the local Ollama model routing registry.",
+            inputs=[],
+            outputs=["model capabilities JSON"],
+            permissions=["read memory folder"],
+        ),
+        inspect_model_registry,
+    ),
+    "route_model_task": (
+        SkillSpec(
+            name="route_model_task",
+            description="Route a task type to the optimal local model.",
+            inputs=["--task-type string"],
+            outputs=["recommended model name"],
+            permissions=["read memory folder"],
+        ),
+        route_model_task,
+    ),
+    "list_skill_packages": (
+        SkillSpec(
+            name="list_skill_packages",
+            description="List installed portable Pip skill packages and their declared permissions.",
+            inputs=[],
+            outputs=["portable skill package manifest summary"],
+            permissions=["read local skills folder"],
+        ),
+        list_skill_packages,
+    ),
     "inspect_token_governor": (
         SkillSpec(
             name="inspect_token_governor",
@@ -904,16 +885,7 @@ SKILLS: dict[str, tuple[SkillSpec, Callable[[argparse.Namespace], dict[str, Any]
         ),
         record_token_event,
     ),
-    "search_brain": (
-        SkillSpec(
-            name="search_brain",
-            description="Search the Brain folder using the Text Hound FTS5 index for extremely fast snippet retrieval.",
-            inputs=["--query text"],
-            outputs=["list of matching filenames and snippets"],
-            permissions=["read brain folder"],
-        ),
-        search_brain,
-    ),
+
     "assess_hardware": (
         SkillSpec(
             name="assess_hardware",
@@ -934,26 +906,7 @@ SKILLS: dict[str, tuple[SkillSpec, Callable[[argparse.Namespace], dict[str, Any]
         ),
         generate_capsule,
     ),
-    "read_brain_file": (
-        SkillSpec(
-            name="read_brain_file",
-            description="Read the contents of a specific file in the Brain folder.",
-            inputs=["--filename name"],
-            outputs=["file content (truncated)"],
-            permissions=["read brain file"],
-        ),
-        read_brain_file,
-    ),
-    "write_brain_file": (
-        SkillSpec(
-            name="write_brain_file",
-            description="Write or append content to a file in the Brain folder.",
-            inputs=["--filename name", "--content text"],
-            outputs=["success status"],
-            permissions=["write brain file"],
-        ),
-        write_brain_file,
-    ),
+
     "hands_type_text": (
         SkillSpec(
             name="hands_type_text",
@@ -994,16 +947,7 @@ SKILLS: dict[str, tuple[SkillSpec, Callable[[argparse.Namespace], dict[str, Any]
         ),
         hands_click_mouse,
     ),
-    "record_new_macro": (
-        SkillSpec(
-            name="record_new_macro",
-            description="Watch and learn: records keystrokes until 'esc' is pressed, saving to a brain macro file.",
-            inputs=["--name name"],
-            outputs=["saved macro filename"],
-            permissions=["record keyboard", "write brain file"],
-        ),
-        record_new_macro,
-    ),
+
     "trigger_pc_focus_mode": (
         SkillSpec(
             name="trigger_pc_focus_mode",
@@ -1216,6 +1160,12 @@ SKILLS: dict[str, tuple[SkillSpec, Callable[[argparse.Namespace], dict[str, Any]
     ),
 }
 
+try:
+    import pip_skill_registry
+    portable_skills = pip_skill_registry.load_portable_skills()
+    SKILLS.update(portable_skills)
+except Exception as e:
+    print(f"[pip_skills] Failed to load portable skills: {e}")
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run small local Pip skills.")
@@ -1232,6 +1182,8 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--result", help="Full Pip result JSON for export_proposal_card")
     run_parser.add_argument("--workspace", default="garden_spiders", help="Approved workspace key")
     run_parser.add_argument("--manifest", default="approved_workspaces.json", help="Approved workspace manifest path")
+    run_parser.add_argument("--limit", type=int, default=20, help="Maximum trace records to return")
+    run_parser.add_argument("--task-type", help="Task type for route_model_task")
     run_parser.add_argument("--wake-minutes", type=int, default=30, help="Minutes until next ambient wake")
     run_parser.add_argument("--context", default="Run the next supervised draft-only ambient cycle.", help="Next ambient wake context")
     run_parser.add_argument("--action-type", default="read_workspace", help="Permission classifier action type")

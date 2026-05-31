@@ -1,0 +1,32 @@
+{
+  "skills": {
+    "read_brain_file": {
+      "name": "read_brain_file",
+      "description": "Read the contents of a specific file in the Brain folder.",
+      "inputs": ["--filename name"],
+      "outputs": ["file content (truncated)"],
+      "permissions": ["read brain file"]
+    },
+    "write_brain_file": {
+      "name": "write_brain_file",
+      "description": "Write or append content to a file in the Brain folder.",
+      "inputs": ["--filename name", "--content text"],
+      "outputs": ["success status"],
+      "permissions": ["write brain file"]
+    },
+    "search_brain": {
+      "name": "search_brain",
+      "description": "Search the Brain folder using the Text Hound FTS5 index for extremely fast snippet retrieval.",
+      "inputs": ["--query text"],
+      "outputs": ["list of matching filenames and snippets"],
+      "permissions": ["read brain folder"]
+    },
+    "record_new_macro": {
+      "name": "record_new_macro",
+      "description": "Watch and learn: records keystrokes until 'esc' is pressed, saving to a brain macro file.",
+      "inputs": ["--name name"],
+      "outputs": ["saved macro filename"],
+      "permissions": ["record keyboard", "write brain file"]
+    }
+  }
+}

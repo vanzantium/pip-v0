@@ -24,6 +24,18 @@ REQUIRED_FILES = [
     "pip_jobs.py",
     "pip_app_skills.py",
     "pip_blender_recipes.py",
+    "pip_flow_master.py",
+    "pip_traces.py",
+    "pip_system_manifest.py",
+    "pip_scheduler.py",
+    "pip_background_tasks.py",
+    "pip_dynamic_prompt.py",
+    "pip_embeddings.py",
+    "pip_finetune_curator.py",
+    "pip_model_registry.py",
+    "pip_self_model.py",
+    "pip_self_reflection.py",
+    "pip_skill_registry.py",
     "pip_token_guard.py",
     "pip_platform.py",
     "pip_goal_engine.py",
@@ -37,6 +49,7 @@ REQUIRED_FILES = [
     "DEPLOYMENT_OPTIONS.md",
     "ANDROID_TELEMETRY_SCHEMA.md",
     "HERMES_OPENMYTHOS_COMPARISON.md",
+    "OPENJARVIS_COMPARISON.md",
 ]
 
 
@@ -127,8 +140,19 @@ def main() -> None:
             failures.append("dashboard should use configured memory path, not hard-coded PipMemory/apps.json")
         if 'creationflags=0x08000000' in control_source:
             failures.append("dashboard should use pip_platform.hidden_subprocess_kwargs for hidden Windows processes")
+        if 'Dashboard started Nightwatch background loop.' in control_source:
+            failures.append("dashboard should request approval before starting Nightwatch")
+        if 'Dashboard ran efficiency script.' in control_source:
+            failures.append("dashboard should request approval before running efficiency scripts")
     except Exception as exc:
         failures.append(f"dashboard source consistency check failed: {exc}")
+
+    try:
+        workspace_source = (root / "pip_workspace.py").read_text(encoding="utf-8")
+        if "DEBUG:" in workspace_source:
+            failures.append("workspace path resolution should not print DEBUG lines during normal use")
+    except Exception as exc:
+        failures.append(f"workspace source consistency check failed: {exc}")
 
     try:
         import pip_platform
@@ -142,6 +166,16 @@ def main() -> None:
 
     try:
         import pip_app_skills
+        import pip_skills
+        import pip_skill_registry
+
+        if "list_skill_packages" not in pip_skills.SKILLS:
+            failures.append("list_skill_packages handler should be registered in SKILLS")
+        packages = pip_skill_registry.list_skill_packages().get("packages", [])
+        package_names = {package.get("name") or package.get("folder") for package in packages}
+        if "dummy_portable_skill" in package_names or "dummy_skill" in package_names:
+            failures.append("dummy portable skill should not be exposed in production skill registry")
+
         shells = pip_app_skills.inspect_developer_shells().get("shells", [])
         shell_names = {shell.get("name") for shell in shells}
         expected_shells = {"Codex", "Claude Code", "Antigravity"}
@@ -153,6 +187,61 @@ def main() -> None:
                 failures.append(f"{shell.get('name')} shell should be UI-handoff approval gated")
     except Exception as exc:
         failures.append(f"developer shell consistency check failed: {exc}")
+
+    try:
+        import pip_flow_master
+        flow = pip_flow_master.inspect_flow_master()
+        if flow.get("contract") != "ingest -> validate -> transform -> emit":
+            failures.append("Flow Master contract should be ingest -> validate -> transform -> emit")
+        if not flow.get("source_exists"):
+            failures.append("Flow Master source folder should exist under the brain folder")
+        boundaries = " ".join(flow.get("safety_boundaries", []))
+        if "does not block apps" not in boundaries and "No keyboard" not in boundaries:
+            failures.append("Flow Master v0 should document safe non-invasive boundaries")
+        sample = pip_flow_master.assess_flow_pressure(
+            "This is urgent, everyone must act now before it is too late.",
+            source_name="Pip doctor Flow Master sample",
+            record=False,
+        )
+        if sample.get("flow_state") not in {"AUDIT", "DWELL", "SHED"}:
+            failures.append("Flow Master should escalate high-pressure sample text")
+    except Exception as exc:
+        failures.append(f"Flow Master consistency check failed: {exc}")
+
+    try:
+        import pip_config
+        import pip_traces
+        import pip_system_manifest
+
+        original_memory_path = pip_config.get_memory_path
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            pip_config.get_memory_path = lambda: temp_root
+            trace = pip_traces.record_trace(
+                "doctor_check",
+                actor="pip_doctor",
+                action="trace_roundtrip",
+                summary="Doctor trace spine roundtrip.",
+            )
+            trace_status = pip_traces.inspect_traces(limit=3)
+            latest_ids = {event.get("id") for event in trace_status.get("latest", [])}
+            if trace.get("id") not in latest_ids:
+                failures.append("trace spine should return the event it just wrote")
+            manifest = pip_system_manifest.save_manifest()
+            primitives = manifest.get("primitives", {})
+            for primitive in ["skills", "workspace_loop", "control_panel", "trace_spine", "governors"]:
+                if primitive not in primitives:
+                    failures.append(f"system manifest missing primitive: {primitive}")
+            if not (temp_root / "pip_system_manifest.json").exists():
+                failures.append("system manifest should write to configured memory folder")
+        pip_config.get_memory_path = original_memory_path
+    except Exception as exc:
+        failures.append(f"trace/system manifest consistency check failed: {exc}")
+    finally:
+        try:
+            pip_config.get_memory_path = original_memory_path
+        except Exception:
+            pass
 
     try:
         import pip_config

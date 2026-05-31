@@ -5,7 +5,7 @@ from pathlib import Path
 import pip_platform
 
 CONFIG_PATH = Path(__file__).resolve().parent / "config.json"
-DEFAULT_MEMORY_PATH = Path(__file__).resolve().parent / "PipMemory"
+DEFAULT_MEMORY_PATH = pip_platform.BRAIN_ROOT / "pip memory 1"
 
 def load_config() -> dict:
     if not CONFIG_PATH.exists():
