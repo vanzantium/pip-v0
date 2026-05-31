@@ -51,6 +51,7 @@ compost_*.json
 resolved_*.json
 skill_dream_result.json
 skill_memory.json
+eval_report.json
 skill_proposal_card.json
 scenario_results.json
 

@@ -646,14 +646,51 @@ class PipEngine:
             )
             return f"I queued that goal for approval instead of starting it immediately. Permission request: {request['id']}."
 
+        # === Governor + Flow gate (broad chat path) ===
+        # The deterministic heuristic floor is "defer/compress" — a model call
+        # only happens if both the Token Governor allows the budget AND the Flow
+        # Master is not under DWELL/SHED pressure. Mirrors the /goal gate above.
+        import pip_token_guard
+        try:
+            import pip_flow_master
+            flow = pip_flow_master.assess_flow_pressure(message, intent="chat")
+        except Exception:
+            flow = {"flow_state": "BUILD", "recommended_response": ""}
+        gov = pip_token_guard.assess_interaction(
+            message,
+            intent="chat",
+            source_type="first_hand",
+            source_name="Pip chat",
+        )
+        if flow.get("flow_state") in {"DWELL", "SHED"} or not gov["allowed"]:
+            pip_token_guard.record_event(
+                "chat",
+                estimated_tokens=gov["estimated_tokens"],
+                actual_tokens=0,
+                saved_tokens=gov["estimated_tokens"],
+                note="deferred by governor/flow",
+            )
+            return gov.get("nudge") or flow.get("recommended_response") or (
+                "Let's let that settle for a moment — I'm easing off to keep things calm."
+            )
+
         url = "http://localhost:11434/api/chat"
-        
-        # Determine safest model and prompt strategy
+
+        # Determine safest model and prompt strategy.
+        # Prefer the model registry's chat route; fall back to the hardware
+        # recommendation; fall back to the lightest static default.
         target_model = "gemma4:e4b" # fallback
         prompt_strategy_inject = ""
         import pip_config
         from pathlib import Path
         import os
+        try:
+            import pip_model_registry
+            routed = pip_model_registry.route_task("chat")
+            if routed:
+                target_model = routed
+        except Exception:
+            pass
         try:
             hw_path = pip_config.get_memory_path() / "hardware.json"
             if not hw_path.exists():
@@ -662,7 +699,9 @@ class PipEngine:
             with open(hw_path, "r", encoding="utf-8") as f:
                 hw = json.load(f)
                 rec = hw.get("recommendation", {})
-                target_model = rec.get("model", target_model).split(" or ")[0] # grab the primary recommendation
+                # Hardware rec only overrides if the registry route didn't resolve.
+                if target_model == "gemma4:e4b":
+                    target_model = rec.get("model", target_model).split(" or ")[0]
                 prompt_strategy_inject = rec.get("prompt_strategy", "")
         except Exception:
             pass
@@ -706,6 +745,15 @@ class PipEngine:
                         chunk = json.loads(line.decode("utf-8"))
                         if "message" in chunk and "content" in chunk["message"]:
                             full_text += chunk["message"]["content"]
+                # Record the spend: rough token estimate from produced characters.
+                measured = max(1, len(full_text) // 4)
+                pip_token_guard.record_event(
+                    "chat",
+                    estimated_tokens=gov["estimated_tokens"],
+                    actual_tokens=measured,
+                    saved_tokens=0,
+                    note=f"chat via {target_model}",
+                )
                 return full_text
         except socket.timeout:
             return (

@@ -713,8 +713,32 @@ def hands_click_mouse(args: argparse.Namespace) -> dict[str, Any]:
     return {"skill": "hands_click_mouse", "ok": False, "message": "Click failed."}
 
 
+def run_eval(args: argparse.Namespace) -> dict[str, Any]:
+    import pip_eval
+
+    scenarios_dir = getattr(args, "scenarios", None) or "scenarios"
+    memory_path = getattr(args, "memory", None)
+    # The default --memory is "memory.json"; only treat it as Mode B input if it exists.
+    if memory_path and not Path(memory_path).exists():
+        memory_path = None
+
+    report = pip_eval.build_eval_report(scenarios_dir=scenarios_dir, memory_path=memory_path)
+    output = getattr(args, "output", None) or "eval_report.json"
+    _write_json(output, report)
+    return {"skill": "run_eval", "verdict": report["verdict"], "output": output}
+
 
 SKILLS: dict[str, tuple[SkillSpec, Callable[[argparse.Namespace], dict[str, Any]]]] = {
+    "run_eval": (
+        SkillSpec(
+            name="run_eval",
+            description="Score proposal quality over scenarios and feedback history.",
+            inputs=["--scenarios scenarios", "--memory optional", "--output optional"],
+            outputs=["eval_report.json", "eval metric summary"],
+            permissions=["read_memory"],
+        ),
+        run_eval,
+    ),
     "inspect_platform": (
         SkillSpec(
             name="inspect_platform",
@@ -1222,6 +1246,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--estimated-tokens", type=int, help="Estimated tokens for record_token_event")
     run_parser.add_argument("--actual-tokens", type=int, help="Actual tokens for record_token_event")
     run_parser.add_argument("--saved-tokens", type=int, help="Saved/avoided tokens for record_token_event")
+    run_parser.add_argument("--scenarios", default="scenarios", help="Scenario directory for run_eval")
 
     return parser
 

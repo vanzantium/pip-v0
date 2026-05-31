@@ -1,0 +1,23 @@
+{
+  "_comment": "Ground-truth labels for Mode A scenario quality eval (pip_eval.py). 'kind' is the firm expected source_kind. 'apps' is the set of acceptable target app_names per the synthetic generator's design intent (generate_synthetic_usage.py); empty means no proposal expected. top1 requires the chosen kind+app to match; expected_in_top3 checks any of the ranked candidates.",
+  "balanced_week": {
+    "kind": "attention_drain",
+    "apps": ["TikTok"]
+  },
+  "doomscroll_week": {
+    "kind": "attention_drain",
+    "apps": ["TikTok"]
+  },
+  "notification_hell_week": {
+    "kind": "notification_drag",
+    "apps": ["Messages", "Gmail", "Calendar"]
+  },
+  "battery_bleed_week": {
+    "kind": "battery_mismatch",
+    "apps": ["TikTok", "Maps", "Messages", "Chrome"]
+  },
+  "healthy_week": {
+    "kind": "none",
+    "apps": []
+  }
+}
