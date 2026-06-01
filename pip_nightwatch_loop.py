@@ -61,6 +61,16 @@ When you are done, use finish_goal.
             except Exception as e:
                 print(f"Dream cycle failed: {e}")
                 
+        # 3. Parameter Sweep
+        print("Running parameter tuning sweep...")
+        try:
+            import pip_eval
+            sweep_result = pip_eval.sweep_parameters()
+            if sweep_result.get("proposed_change"):
+                print("Sweep found a better parameter configuration. Check permissions queue.")
+        except Exception as e:
+            print(f"Sweep failed: {e}")
+            
         # Sleep for a long time before next dream (e.g. 15 minutes)
         time.sleep(900)
 

@@ -408,333 +408,56 @@ def page(status: dict[str, Any]) -> str:
     if not beliefs and not rules:
         self_model_html = "<p class='small' style='color:var(--text-muted);'>No beliefs or rules have been extracted yet.</p>"
 
-    return f"""<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Pip's Digital Tavern</title>
-  <style>
-    :root {{
-      --ink: #182018;
-      --moss: #5c6f43;
-      --leaf: #d9e2be;
-      --silk: #f8f3df;
-      --clay: #b96f4d;
-      --shadow: rgba(28, 36, 23, 0.16);
-    }}
-    body {{
-      margin: 0;
-      color: var(--ink);
-      background:
-        radial-gradient(circle at top left, rgba(16, 185, 129, 0.4), transparent 32rem),
-        linear-gradient(140deg, #0f172a 0%, #1e1b4b 54%, #064e3b 100%);
-      font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
-    }}
-    main {{
-      max-width: 860px;
-      margin: 0 auto;
-      padding: 22px;
-    }}
-    .hero, .card {{
-      background: rgba(255, 253, 240, .82);
-      border: 1px solid rgba(92, 111, 67, .22);
-      border-radius: 24px;
-      box-shadow: 0 18px 50px var(--shadow);
-      padding: 24px;
-      margin: 20px 0;
-    }}
-    h1 {{
-      font-size: clamp(2rem, 6vw, 3rem);
-      margin: 0 0 10px;
-      color: var(--ink);
-    }}
-    h2 {{
-      margin: 0 0 15px;
-      color: var(--moss);
-      font-size: 1.4rem;
-    }}
-    p {{ line-height: 1.5; }}
-    .pill {{
-      display: inline-block;
-      border-radius: 999px;
-      background: var(--leaf);
-      padding: 6px 12px;
-      margin: 4px 6px 4px 0;
-      font-size: .9rem;
-      font-weight: 600;
-    }}
-    .actions {{
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-      gap: 12px;
-      margin-top: 15px;
-    }}
-    button {{
-      width: 100%;
-      border: 0;
-      border-radius: 12px;
-      padding: 12px;
-      background: var(--moss);
-      color: white;
-      font-weight: bold;
-      font-size: 1rem;
-      cursor: pointer;
-      box-shadow: 0 4px 12px var(--shadow);
-      transition: transform 0.1s, filter 0.1s;
-    }}
-    button:active {{ transform: scale(0.98); filter: brightness(0.9); }}
-    button.secondary {{ background: var(--clay); }}
-    button.quiet {{ background: #7d8663; }}
-    .small {{ color: #4d5b3b; font-size: .9rem; }}
     
-    .scroll-box {{
-      max-height: 250px;
-      overflow-y: auto;
-      border: 1px solid rgba(92, 111, 67, .3);
-      padding: 15px;
-      border-radius: 12px;
-      background: rgba(255, 255, 255, 0.5);
-    }}
-  </style>
-</head>
-<body>
-<main>
-  <section class="hero">
-    <span class="pill">Status: {html.escape(status_label)}</span>
-    <h1>Pip's Digital Tavern</h1>
-    <p>Your local assistant. Pip handles the small things so you don't have to.</p>
-    <p style="margin-top:16px">
-      <a href="/fairy"
-         onclick="window.open('/fairy','pip-fairy','width=300,height=440,resizable=yes,menubar=no,toolbar=no,location=no');return false;"
-         style="display:inline-block;background:var(--moss);color:white;text-decoration:none;
-                border-radius:12px;padding:12px 24px;font-weight:bold;
-                box-shadow:0 8px 18px var(--shadow);">
-        ✦ Wake Pip
-      </a>
-    </p>
-  </section>
+    # --- Pre-computations for Template ---
+    escaped_memory_path = html.escape(str(memory_path))
+    escaped_proposal_text = html.escape(proposal_text)
+    platform_os = html.escape(platform_status.get('os', 'Unknown'))
+    blender_role = html.escape(blender_summary.get('role', 'app teammate'))
+    escaped_status_label = html.escape(status_label)
+    escaped_flow_source = html.escape(flow_source_text)
+    blender_level = blender_summary.get('level', 1)
+    blender_xp = blender_summary.get('xp', 0)
+    trace_total_events = trace_status.get('total_events', 0)
 
-  <section class="card">
-    <h2>Current Thoughts</h2>
-    <p><strong>{html.escape(proposal_text)}</strong></p>
-    <div class="actions">
-      <form method="post" action="/run-scan">
-        <button type="submit">Run Memory Scan</button>
-      </form>
-      <form method="post" action="/run-ambient">
-        <button class="quiet" type="submit">Start Ambient Loop</button>
-      </form>
-    </div>
-  </section>
+    # --- Eval Scorecard ---
+    eval_html = "<p class='small' style='color:var(--text-muted);'>No evaluation run yet.</p>"
+    try:
+        import pip_eval
+        report = pip_eval.build_eval_report(memory_path=str(memory_path))
+        if report.get("feedback") and report["feedback"].get("summary"):
+            f_sum = report["feedback"]["summary"]
+            eval_html = f"""
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px;">
+                <div style="background: rgba(255,255,255,0.7); padding: 8px; border-radius: 6px;">
+                    <strong style="display:block; font-size: 0.8rem; color: #666;">Acceptance Rate</strong>
+                    <span style="font-size: 1.1rem; color: var(--moss);">{f_sum.get('acceptance_rate', 'N/A')}</span>
+                </div>
+                <div style="background: rgba(255,255,255,0.7); padding: 8px; border-radius: 6px;">
+                    <strong style="display:block; font-size: 0.8rem; color: #666;">Repeat Rejections</strong>
+                    <span style="font-size: 1.1rem; color: #ef4444;">{f_sum.get('repeat_rejection_rate', 'N/A')}</span>
+                </div>
+                <div style="background: rgba(255,255,255,0.7); padding: 8px; border-radius: 6px;">
+                    <strong style="display:block; font-size: 0.8rem; color: #666;">Rank Quality (MRR)</strong>
+                    <span style="font-size: 1.1rem; color: var(--moss);">{f_sum.get('rank_quality_mrr', 'N/A')}</span>
+                </div>
+                <div style="background: rgba(255,255,255,0.7); padding: 8px; border-radius: 6px;">
+                    <strong style="display:block; font-size: 0.8rem; color: #666;">Total Proposals</strong>
+                    <span style="font-size: 1.1rem; color: var(--ink);">{f_sum.get('ever_proposed', '0')}</span>
+                </div>
+            </div>
+            """
+    except Exception as e:
+        eval_html = f"<p class='small' style='color:var(--text-muted);'>Eval error: {{e}}</p>"
 
-  <section class="card">
-    <h2>Autonomous Mode</h2>
-    <p class="small">Queue a long-running goal for review. Pip will not start autonomous work until you approve it.</p>
-    <form method="post" action="/run-goal">
-      <p><input type="text" name="goal_text" placeholder="e.g. Read the brain folder and summarize..." style="width:100%; border-radius:8px; padding:10px; border:1px solid rgba(92,111,67,.3); font-family:inherit;"></p>
-      <div class="actions">
-        <button type="submit" style="background: var(--clay);">Request Autonomous Goal</button>
-      </div>
-    </form>
-  </section>
+    # --- Render Template ---
+    template_file = Path("dashboard_ui/template.html")
+    if template_file.exists():
+        tpl = template_file.read_text(encoding="utf-8")
+        return tpl.format(**locals())
+    else:
+        return "<html><body><h1>Missing template.html</h1></body></html>"
 
-  <section class="card">
-    <h2>Supervised Scheduler</h2>
-    <p class="small">Pip's ambient and long-running tasks queue.</p>
-    <div class="scroll-box" style="max-height: 250px;">
-      {scheduler_html}
-    </div>
-  </section>
-
-  <section class="card">
-    <h2>Token Governor</h2>
-    <span class="pill">Mode: {gov_mode}</span>
-    <span class="pill">Daily remaining: {gov_pct}%</span>
-    <p class="small">{gov_nudge}</p>
-    <p class="small"><strong>Signal bridge:</strong> {gov_signal}</p>
-    <div class="scroll-box" style="max-height:150px;">
-      {gov_events}
-    </div>
-  </section>
-
-  <section class="card">
-    <h2>Flow Master</h2>
-    <span class="pill">State: {flow_state}</span>
-    <span class="pill">Pressure: {flow_pressure_text}</span>
-    <p class="small"><strong>Contract:</strong> ingest -&gt; validate -&gt; transform -&gt; emit</p>
-    <p class="small"><strong>Digest:</strong> {flow_action}</p>
-    <p class="small"><strong>Signal:</strong> {flow_summary}</p>
-    <p class="small">{html.escape(flow_source_text)}. This v0 layer assesses text pressure only; it does not monitor or block apps.</p>
-    <form method="post" action="/flow-master/assess">
-      <p><textarea name="content" placeholder="Paste a post, thought, task, or prompt to assess pressure..." style="width:100%;height:70px;border-radius:8px;padding:8px;"></textarea></p>
-      <div class="actions">
-        <button class="quiet" type="submit">Run Flow Check</button>
-      </div>
-    </form>
-    <form method="post" action="/flow-master/bootstrap" style="margin-top:10px;">
-      <button class="secondary" type="submit">Refresh Flow Doctrine</button>
-    </form>
-  </section>
-
-  <section class="card">
-    <h2>Trace Spine</h2>
-    <span class="pill">Events: {trace_status.get('total_events', 0)}</span>
-    <span class="pill">Append-only</span>
-    <p class="small">Recent receipts from CLI runs, dashboard actions, Flow Master checks, and future handoffs.</p>
-    <div class="scroll-box" style="max-height:220px;">
-      {trace_html}
-    </div>
-  </section>
-
-  <section class="card">
-    <h2>System Map</h2>
-    <p class="small">Pip's compact self-description: roots, safety contract, primitives, and control surfaces.</p>
-    <p class="small"><strong>Primitives:</strong> {primitive_text}</p>
-    <p class="small" style="word-break:break-all;">{system_manifest_path}</p>
-    <form method="post" action="/system-manifest/refresh" style="margin-top:10px;">
-      <button class="quiet" type="submit">Refresh System Map</button>
-    </form>
-  </section>
-
-  <section class="card">
-    <h2>Platform Fit</h2>
-    <span class="pill">OS: {html.escape(platform_status.get('os', 'Unknown'))}</span>
-    <p class="small">Pip's brain is cross-platform; some body features depend on OS permissions and adapters.</p>
-    <div class="scroll-box" style="max-height:180px;">
-      {platform_html}
-    </div>
-  </section>
-
-  <section class="card">
-    <h2>Developer Shells</h2>
-    <p class="small">Starter shells for supervised handoffs into coding assistants. Pip can prepare the task; actual UI handoff remains approval-gated.</p>
-    <form method="post" action="/developer-shells/bootstrap" style="margin-bottom:12px;">
-      <button class="quiet" type="submit">Bootstrap Developer Shells</button>
-    </form>
-    <div class="scroll-box" style="max-height:280px;">
-      {shell_cards}
-    </div>
-  </section>
-
-  <section class="card">
-    <h2>Permission Queue</h2>
-    <p class="small">High-risk actions wait here before Pip can touch apps, run scripts, or start autonomous work.</p>
-    {permissions_html}
-  </section>
-
-  <section class="card">
-    <h2>Running Jobs</h2>
-    <p class="small">Approved long-running work appears here with recent logs and cooperative stop controls.</p>
-    {jobs_html}
-  </section>
-
-  <section class="card">
-    <h2>Blender Skill Track</h2>
-    <p class="small">Pip's starter path toward becoming a tiny animation-team assistant.</p>
-    <p><strong>Level {blender_summary.get('level', 1)}</strong> | {blender_summary.get('xp', 0)}xp | {html.escape(blender_summary.get('role', 'app teammate'))}</p>
-    <div class="scroll-box" style="max-height:220px;margin-bottom:12px;">
-      {blender_domain_html}
-    </div>
-    <p class="small"><strong>Next focus:</strong></p>
-    <ul class="small">{blender_focus}</ul>
-    <form method="post" action="/app-skills/award">
-      <input type="hidden" name="app" value="Blender">
-      <input type="hidden" name="domain" value="navigation">
-      <input type="hidden" name="amount" value="10">
-      <input type="hidden" name="evidence" value="Manual Blender practice/check-in from dashboard.">
-      <button type="submit">Log Blender Practice</button>
-    </form>
-  </section>
-
-  <section class="card">
-    <h2>Blender Recipe Lab</h2>
-    <p class="small">Draft-only task recipes. Pip writes plans into memory first; execution still needs separate approval.</p>
-    {latest_recipe}
-    <div class="scroll-box" style="max-height:360px;">
-      {recipe_buttons}
-    </div>
-  </section>
-
-  <section class="card">
-    <h2>My Apps</h2>
-    <p class="small" style="margin-bottom: 12px;">Select which applications Pip is allowed to interact with. She will gradually learn and level up as you use them together!</p>
-    
-    <form method="post" action="/apps/scan" style="margin-bottom: 15px;">
-      <button type="submit" style="background: var(--clay);">🔍 Scan Computer for Installed Apps</button>
-    </form>
-    
-    <form method="post" action="/save-apps">
-      <div class="scroll-box" style="margin-bottom: 15px;">
-        {apps_html}
-      </div>
-      <div class="actions">
-        <button type="submit">Save Allowed Apps</button>
-      </div>
-    </form>
-  </section>
-
-  <section class="card">
-    <h2>System Diagnosis & Optimization</h2>
-    <p>Pip can scan your PC's hardware and recommend the safest Ollama model. Memory cleanup is now separated from normal scans so status checks stay gentle.</p>
-    <form method="post" action="/hardware/scan">
-      <div class="actions">
-        <button class="secondary" type="submit">Run Hardware Scan</button>
-      </div>
-    </form>
-    {hw_html}
-  </section>
-
-  <section class="card">
-    <h2>Linked Devices</h2>
-    <p class="small">Connect your phone or tablet to allow Pip to assist you on the go.</p>
-    <form method="post" action="/phone/usage-import">
-      <p><textarea name="usage_json" placeholder="Paste device usage JSON here..." style="width:100%;height:60px;border-radius:8px;padding:8px;"></textarea></p>
-      <div class="actions">
-        <button class="secondary" type="submit">Sync Device</button>
-      </div>
-    </form>
-  </section>
-
-  <section class="card">
-    <h2>Nightwatch (Free Play)</h2>
-    <p class="small">Let Pip securely explore, run sleep cycles, and self-reflect in the background.</p>
-    <div class="actions">
-      <form method="post" action="/nightwatch/start">
-        <button class="secondary" type="submit">Start Sleep Cycle</button>
-      </form>
-    </div>
-  </section>
-
-  <section class="card">
-    <h2>Efficiency Scripts</h2>
-    <p class="small">Background python routines. Tracked scripts appear in Running Jobs. Silent scripts run fully detached.</p>
-    <div class="scroll-box" style="max-height: 250px;">
-      {scripts_html}
-    </div>
-  </section>
-
-  <section class="card">
-    <h2>Pip's Memory Folder</h2>
-    <p>Pip stores all her thoughts, drafts, and JSON files in a dedicated local folder. You can safely open and edit these files at any time.</p>
-    <div style="background: rgba(255,255,255,0.6); padding: 10px; border-radius: 8px; border: 1px solid rgba(92,111,67,0.3); font-family: monospace; word-break: break-all; margin-bottom: 15px;">
-      {html.escape(str(memory_path))}
-    </div>
-    <form method="post" action="/select-folder">
-      <div class="actions">
-        <button class="secondary" type="submit">Browse for Folder...</button>
-      </div>
-    </form>
-  </section>
-  <section class="card">
-    <h2>Pip's Self-Model (Beliefs & Rules)</h2>
-    <p class="small">Pip learns from her interactions. You can prune incorrect beliefs here to teach her lessons.</p>
-    {self_model_html}
-  </section>
-
-</main>
-</body>
-</html>"""
 
 def fairy_page() -> str:
     from pathlib import Path

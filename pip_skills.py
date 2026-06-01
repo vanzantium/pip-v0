@@ -713,6 +713,32 @@ def hands_click_mouse(args: argparse.Namespace) -> dict[str, Any]:
     return {"skill": "hands_click_mouse", "ok": False, "message": "Click failed."}
 
 
+def reword_proposal(args: argparse.Namespace) -> dict[str, Any]:
+    from pip_engine import PipEngine, ThermalState
+    import json
+    
+    result_path = Path(getattr(args, "result", "sample_result.json") or "sample_result.json")
+    if not result_path.exists():
+        return {"skill": "reword_proposal", "error": "Result file not found."}
+    try:
+        with open(result_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception as e:
+        return {"skill": "reword_proposal", "error": f"Failed to load result: {e}"}
+
+    proposal = data.get("proposal_card")
+    if not proposal:
+        return {"skill": "reword_proposal", "error": "No proposal_card in result."}
+
+    engine = PipEngine()
+    thermal = ThermalState(0.5, 0.5, 0.5, 0.5, 0.5, 0.5)
+    reworded = engine.propose_reword(proposal, thermal)
+    
+    out_path = getattr(args, "output", "reworded_proposal.json") or "reworded_proposal.json"
+    _write_json(out_path, reworded)
+    return {"skill": "reword_proposal", "status": "ok", "output": out_path, "reworded": reworded.get("reworded", False)}
+
+
 def run_eval(args: argparse.Namespace) -> dict[str, Any]:
     import pip_eval
 
@@ -728,7 +754,24 @@ def run_eval(args: argparse.Namespace) -> dict[str, Any]:
     return {"skill": "run_eval", "verdict": report["verdict"], "output": output}
 
 
+def sweep_parameters(args: argparse.Namespace) -> dict[str, Any]:
+    import pip_eval
+    scenarios_dir = getattr(args, "scenarios", None) or "scenarios"
+    result = pip_eval.sweep_parameters(scenarios_dir=scenarios_dir)
+    return {"skill": "sweep_parameters", **result}
+
+
 SKILLS: dict[str, tuple[SkillSpec, Callable[[argparse.Namespace], dict[str, Any]]]] = {
+    "reword_proposal": (
+        SkillSpec(
+            name="reword_proposal",
+            description="Optionally soften/clarify a proposal card via a local model, preserving score, kind, and tags. Falls back to heuristic text.",
+            inputs=["--result sample_result.json", "--output optional"],
+            outputs=["reworded proposal card (or original if model unavailable)"],
+            permissions=["read_memory", "local_model"],
+        ),
+        reword_proposal,
+    ),
     "run_eval": (
         SkillSpec(
             name="run_eval",
@@ -738,6 +781,16 @@ SKILLS: dict[str, tuple[SkillSpec, Callable[[argparse.Namespace], dict[str, Any]
             permissions=["read_memory"],
         ),
         run_eval,
+    ),
+    "sweep_parameters": (
+        SkillSpec(
+            name="sweep_parameters",
+            description="Run an evaluation sweep testing alternative engine constants.",
+            inputs=["--scenarios optional"],
+            outputs=["parameter diff", "safety request if optimal"],
+            permissions=["read_memory", "write_memory"],
+        ),
+        sweep_parameters,
     ),
     "inspect_platform": (
         SkillSpec(

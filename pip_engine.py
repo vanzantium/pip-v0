@@ -162,12 +162,27 @@ class PipEngine:
             skin_key = f"{kind}::{app_name}"
             current = memory.skin_weights.get(skin_key, 0.0)
             if status == "accepted":
+                try:
+                    import pip_finetune_curator
+                    evidence = str(latest.get("state_vector", {}))
+                    pip_finetune_curator.record_accepted_proposal(latest.get("proposal", ""), evidence)
+                except Exception as e:
+                    print(f"Error curating accepted proposal: {e}")
+                
                 memory.skin_weights[skin_key] = round(max(-0.5, current - 0.25), 3)
                 memory.cooldowns[skin_key] = round(min(1.0, memory.cooldowns.get(skin_key, 0.0) + 0.45), 3)
                 memory.fur_reactions.append(
                     {"app_name": app_name, "kind": kind, "effect": "cooled", "strength": 0.25}
                 )
             elif status == "rejected":
+                try:
+                    import pip_finetune_curator
+                    evidence = str(latest.get("state_vector", {}))
+                    note = latest.get("notes", [""])[0] if latest.get("notes") else ""
+                    pip_finetune_curator.record_rejected_proposal(latest.get("proposal", ""), evidence, note)
+                except Exception as e:
+                    print(f"Error curating rejected proposal: {e}")
+                    
                 memory.skin_weights[skin_key] = round(min(1.0, current + 0.35), 3)
                 memory.fur_reactions.append(
                     {"app_name": app_name, "kind": kind, "effect": "avoid_repeat", "strength": 0.35}
@@ -768,3 +783,77 @@ class PipEngine:
             )
         except Exception as e:
             return f"My language center glitched: {e}"
+
+    def propose_reword(self, card: dict, thermal: ThermalState) -> dict:
+        import pip_flow_master
+        import pip_token_guard
+        import pip_model_registry
+        import pip_traces
+        import urllib.request
+        import json
+        import socket
+        
+        # 1. Invariants captured up front
+        invariants = {k: card[k] for k in ("score", "source_kind", "rationale_tags") if k in card}
+
+        # 2. Governors
+        try:
+            flow = pip_flow_master.assess_flow_pressure(card.get("proposal", ""), intent="reword")
+        except Exception:
+            flow = {"flow_state": "BUILD"}
+            
+        gov = pip_token_guard.assess_interaction(card.get("proposal", ""), intent="reword",
+                                                 source_type="first_hand",
+                                                 source_name="Pip reword")
+                                                 
+        if flow.get("flow_state") in {"DWELL", "SHED"} or not gov.get("allowed", True):
+            pip_token_guard.record_event("reword", estimated_tokens=gov.get("estimated_tokens", 50), actual_tokens=0, saved_tokens=gov.get("estimated_tokens", 50), note="deferred by governor/flow")
+            return {**card, "reworded": False, "reason": "deferred_by_governor"}
+
+        # 3. Route to the formatting-tier model
+        try:
+            model = pip_model_registry.route_task("formatting")
+        except Exception:
+            model = "qwen2.5:0.5b"
+
+        # 4. Call Ollama
+        system_prompt = "You are Pip's formatting layer. Your job is to make proposal and evidence text gentler and clearer. Output strictly JSON with keys 'proposal' and 'evidence'."
+        prompt = f"Proposal: {card.get('proposal', '')}\nEvidence: {card.get('evidence', '')}"
+        
+        url = "http://localhost:11434/api/chat"
+        payload = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt}
+            ],
+            "stream": False,
+            "format": "json",
+            "options": {"temperature": 0.3}
+        }
+        
+        try:
+            req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers={"Content-Type": "application/json"})
+            with urllib.request.urlopen(req, timeout=10) as response:
+                res_data = json.loads(response.read().decode("utf-8"))
+                content = res_data.get("message", {}).get("content", "{}")
+                parsed = json.loads(content)
+                
+                # 5. Reattach invariants
+                out = {**card, **invariants,
+                       "proposal": parsed.get("proposal", card.get("proposal")), 
+                       "evidence": parsed.get("evidence", card.get("evidence")),
+                       "reworded": True, "model": model}
+
+                try:
+                    pip_traces.record_trace(kind="model_reword", action="propose_reword",
+                                            status="ok", summary=f"reworded via {model}",
+                                            details={"invariants_preserved": True},
+                                            source="pip_model", tags=["model", "reword"])
+                except Exception:
+                    pass
+                    
+                pip_token_guard.record_event("reword", estimated_tokens=gov.get("estimated_tokens", 50), actual_tokens=gov.get("estimated_tokens", 50), saved_tokens=0, note=f"reword via {model}")
+                return out
+        except Exception as e:
+            return {**card, "reworded": False, "reason": "model_unavailable"}

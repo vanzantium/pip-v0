@@ -25,3 +25,14 @@ def append_interaction(instruction: str, system_prompt: str, response_text: str,
         f.write(json.dumps(entry) + "\n")
         
     print(f"[Dataset Curator] Appended new fine-tuning sample from {source}.")
+
+def record_accepted_proposal(proposal_text: str, evidence_text: str) -> None:
+    system_prompt = "You are Pip, a localized AI assistant. Generate a high quality proposal based on the current context."
+    instruction = f"Context Evidence:\n{evidence_text}\n\nDraft a proposal to assist the user."
+    append_interaction(instruction, system_prompt, proposal_text, source="accepted_proposal")
+
+def record_rejected_proposal(proposal_text: str, evidence_text: str, rejection_note: str = "") -> None:
+    system_prompt = "You are Pip, a localized AI assistant. Generate a high quality proposal based on the current context."
+    instruction = f"Context Evidence:\n{evidence_text}\n\nDraft a proposal to assist the user."
+    response = f"[BAD PROPOSAL - DO NOT EMIT]\n{proposal_text}\n\nUser Rejection Note: {rejection_note}"
+    append_interaction(instruction, system_prompt, response, source="rejected_proposal")

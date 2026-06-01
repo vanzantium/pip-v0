@@ -203,6 +203,64 @@ def build_eval_report(scenarios_dir: str | None = None, memory_path: str | None 
     return report
 
 
+def sweep_parameters(scenarios_dir: str = "scenarios") -> dict[str, Any]:
+    import pip_engine
+    
+    orig_halt_margin = getattr(pip_engine, "HALT_MARGIN", 0.12)
+    
+    best_top1 = -1.0
+    best_margin = -1.0
+    best_config = {}
+    
+    results = []
+    
+    for margin_test in [0.08, 0.12, 0.16]:
+        pip_engine.HALT_MARGIN = margin_test
+        
+        report = evaluate_scenarios(scenarios_dir)
+        summary = report.get("summary", {})
+        top1 = summary.get("top1_accuracy", 0)
+        mean_margin = summary.get("mean_margin_when_correct") or 0.0
+        
+        results.append({
+            "HALT_MARGIN": margin_test,
+            "top1_accuracy": top1,
+            "mean_margin": mean_margin
+        })
+        
+        if top1 > best_top1 or (top1 == best_top1 and mean_margin > best_margin):
+            best_top1 = top1
+            best_margin = mean_margin
+            best_config = {"HALT_MARGIN": margin_test}
+            
+    pip_engine.HALT_MARGIN = orig_halt_margin
+    
+    proposed = False
+    diff = None
+    if best_config and best_config["HALT_MARGIN"] != orig_halt_margin:
+        proposed = True
+        diff = f"- HALT_MARGIN = {orig_halt_margin}\\n+ HALT_MARGIN = {best_config['HALT_MARGIN']}"
+        
+        try:
+            import pip_safety
+            pip_safety.request_safety_permission(
+                action_type="tuning_change",
+                title="Approve Parameter Tuning Sweep",
+                rationale=f"Sweep found improved params: {diff}",
+                details={"best_config": best_config, "results": results}
+            )
+        except Exception:
+            pass
+            
+    return {
+        "best_config": best_config,
+        "best_top1_accuracy": best_top1,
+        "proposed_change": proposed,
+        "diff": diff,
+        "sweep_results": results
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Score Pip proposal quality (Mode A scenarios + optional feedback).")
     parser.add_argument("--scenarios", default="scenarios", help="Scenario directory (Mode A)")
