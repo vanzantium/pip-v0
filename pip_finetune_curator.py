@@ -36,3 +36,30 @@ def record_rejected_proposal(proposal_text: str, evidence_text: str, rejection_n
     instruction = f"Context Evidence:\n{evidence_text}\n\nDraft a proposal to assist the user."
     response = f"[BAD PROPOSAL - DO NOT EMIT]\n{proposal_text}\n\nUser Rejection Note: {rejection_note}"
     append_interaction(instruction, system_prompt, response, source="rejected_proposal")
+
+def export_dataset() -> str:
+    """Exports training_data.jsonl into a unified ShareGPT json array file."""
+    p = get_dataset_path()
+    if not p.exists():
+        return "No training data found yet."
+        
+    out_path = pip_config.get_memory_path() / "sharegpt_finetune_dataset.json"
+    
+    entries = []
+    with open(p, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entries.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+                
+    if not entries:
+        return "Training data is empty."
+        
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump(entries, f, indent=2)
+        
+    return f"Exported {len(entries)} conversations to {out_path.name}"

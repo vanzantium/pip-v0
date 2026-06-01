@@ -760,6 +760,10 @@ def sweep_parameters(args: argparse.Namespace) -> dict[str, Any]:
     result = pip_eval.sweep_parameters(scenarios_dir=scenarios_dir)
     return {"skill": "sweep_parameters", **result}
 
+def export_dataset(args: argparse.Namespace) -> dict[str, Any]:
+    import pip_finetune_curator
+    result = pip_finetune_curator.export_dataset()
+    return {"skill": "export_dataset", "result": result}
 
 SKILLS: dict[str, tuple[SkillSpec, Callable[[argparse.Namespace], dict[str, Any]]]] = {
     "reword_proposal": (
@@ -791,6 +795,16 @@ SKILLS: dict[str, tuple[SkillSpec, Callable[[argparse.Namespace], dict[str, Any]
             permissions=["read_memory", "write_memory"],
         ),
         sweep_parameters,
+    ),
+    "export_dataset": (
+        SkillSpec(
+            name="export_dataset",
+            description="Export Pip's fine-tuning dataset to ShareGPT format.",
+            inputs=[],
+            outputs=["sharegpt_finetune_dataset.json path"],
+            permissions=["read_memory", "write_memory"],
+        ),
+        export_dataset,
     ),
     "inspect_platform": (
         SkillSpec(

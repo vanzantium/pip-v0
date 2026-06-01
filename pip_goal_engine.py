@@ -57,6 +57,21 @@ If you output anything other than JSON, it will fail.
         messages = [{"role": "system", "content": system_prompt}]
         allowed_tools = {"read_brain_file", "write_brain_file", "search_brain"}
         
+        # Long-Term Memory Injection (RAG)
+        try:
+            import pip_embeddings
+            store = pip_embeddings.PersonaMemoryStore()
+            relevant = store.query_memory(goal, top_k=3)
+            if relevant:
+                mem_context = "\n\nRelevant Past Memories/Dreams:\n"
+                for r in relevant:
+                    mem_context += f"- {r}\n"
+                messages[0]["content"] += mem_context
+                emit(f"[Pip Memory]: Recalled {len(relevant)} relevant memories.")
+        except Exception as e:
+            emit(f"[Pip Memory Error]: {e}")
+        
+        
         for step in range(self.max_steps):
             if should_stop and should_stop():
                 return "Stopped by user request."

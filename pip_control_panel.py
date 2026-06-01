@@ -1017,7 +1017,22 @@ class PipHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         parsed = urlparse(self.path)
         try:
-            if parsed.path == "/run-scan":
+            if parsed.path == "/system/enable-startup":
+                import os
+                import sys
+                from pathlib import Path
+                startup_dir = Path(os.environ.get("APPDATA", "")) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"
+                if startup_dir.exists():
+                    vbs_path = startup_dir / "pip_nightwatch.vbs"
+                    pythonw_exe = Path(sys.executable).parent / "pythonw.exe"
+                    if not pythonw_exe.exists():
+                        pythonw_exe = "pythonw"
+                    script_content = f'Set WshShell = CreateObject("WScript.Shell")\\nWshShell.Run "{pythonw_exe} ""{Path(__file__).parent / "pip_nightwatch_loop.py"}""", 0, False\\n'
+                    vbs_path.write_text(script_content, encoding="utf-8")
+                    self.trace_dashboard_action("enable_startup", "Created silent Pip startup VBS in Windows Startup folder.")
+                self.redirect_home()
+                return
+            elif parsed.path == "/run-scan":
                 draft_next_actions(self.workspace_key, self.manifest_path)
                 self.trace_dashboard_action("run_scan", "Dashboard requested a workspace scan and next-action draft.")
                 self.redirect_home()
