@@ -38,6 +38,7 @@ import pip_system_manifest
 import pip_token_guard
 import pip_traces
 import pip_background_tasks
+import pip_task_runs
 
 class QuietThreadingHTTPServer(ThreadingHTTPServer):
     def handle_error(self, request: object, client_address: tuple[str, int]) -> None:
@@ -65,12 +66,40 @@ def start_nightwatch_loop() -> dict[str, Any]:
     nw_path = Path(__file__).resolve().parent / "pip_nightwatch_loop.py"
     if not nw_path.exists():
         return {"ok": False, "message": "pip_nightwatch_loop.py not found."}
-    subprocess.Popen(
-        [sys.executable, str(nw_path)],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        stdin=subprocess.DEVNULL,
-        **pip_platform.hidden_subprocess_kwargs(),
+    run = pip_task_runs.start_task_run(
+        "background_loop",
+        "nightwatch",
+        summary="Dashboard requested Nightwatch background loop.",
+        source="pip_control_panel",
+        details={"script": str(nw_path)},
+    )
+    try:
+        subprocess.Popen(
+            [sys.executable, str(nw_path)],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL,
+            **pip_platform.hidden_subprocess_kwargs(),
+        )
+    except Exception as exc:
+        pip_task_runs.finish_task_run(
+            run["id"],
+            "background_loop",
+            "nightwatch",
+            "failed",
+            summary=f"Nightwatch launch failed: {exc}",
+            source="pip_control_panel",
+            details={"script": str(nw_path), "error": str(exc)},
+        )
+        return {"ok": False, "message": f"Nightwatch launch failed: {exc}"}
+    pip_task_runs.finish_task_run(
+        run["id"],
+        "background_loop",
+        "nightwatch",
+        "launched",
+        summary="Nightwatch background loop launched.",
+        source="pip_control_panel",
+        details={"script": str(nw_path)},
     )
     return {"ok": True, "message": "Nightwatch background loop started."}
 
@@ -342,6 +371,25 @@ def page(status: dict[str, Any]) -> str:
         """
     if not scheduler_html:
         scheduler_html = "<p class='small'>No jobs scheduled.</p>"
+
+    task_runs_status = scheduler_status.get("recent_task_runs") or {}
+    if not task_runs_status:
+        try:
+            task_runs_status = pip_task_runs.inspect_task_runs(limit=8)
+        except Exception as exc:
+            task_runs_status = {"latest": [], "error": str(exc)}
+    task_runs_html = ""
+    for event in reversed(task_runs_status.get("latest", [])):
+        task_runs_html += f"""
+        <div style="background: rgba(255,255,255,0.05); border-radius: 8px; padding: 10px; margin-bottom: 8px;">
+            <strong>{html.escape(event.get('name', 'task'))}</strong>
+            <span class="small pill">{html.escape(event.get('status', 'unknown'))}</span>
+            <p class="small" style="margin-top:4px;">{html.escape(event.get('summary', ''))}</p>
+            <p class="small" style="margin-top:4px;font-family:monospace;color:var(--quiet);">{html.escape(event.get('at', ''))} | {html.escape(event.get('kind', 'task'))}</p>
+        </div>
+        """
+    if not task_runs_html:
+        task_runs_html = "<p class='small'>No task-run receipts yet.</p>"
 
     scripts_html = ""
     try:
@@ -932,6 +980,10 @@ class PipHandler(BaseHTTPRequestHandler):
                 self.send_json(status.get("permissions") or {})
             elif parsed.path == "/scheduler/status":
                 self.send_json(pip_scheduler.get_status())
+            elif parsed.path == "/task-runs":
+                query = parse_qs(parsed.query)
+                limit = _safe_form_int(query, "limit", 20)
+                self.send_json(pip_task_runs.inspect_task_runs(limit=limit))
             elif parsed.path == "/jobs":
                 self.send_json(pip_jobs.list_jobs())
             elif parsed.path == "/app-skills":

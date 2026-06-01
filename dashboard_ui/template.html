@@ -220,6 +220,15 @@
   </section>
 
   <section class="card">
+    <h2>Task Run Receipts</h2>
+    <p class="small">Durable launch/status receipts for scheduled jobs, Nightwatch, and background scripts. This is Pip's audit trail for "what actually ran."</p>
+    <div class="scroll-box" style="max-height:240px;">
+      {task_runs_html}
+    </div>
+    <p class="small" style="margin-top:10px;"><a href="/task-runs" style="color:var(--moss);">Open task-run JSON</a></p>
+  </section>
+
+  <section class="card">
     <h2>System Map</h2>
     <p class="small">Pip's compact self-description: roots, safety contract, primitives, and control surfaces.</p>
     <p class="small"><strong>Primitives:</strong> {primitive_text}</p>

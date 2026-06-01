@@ -97,14 +97,19 @@ def build_manifest() -> dict[str, Any]:
             "control_panel": {
                 "description": "Local LAN dashboard for S25/browser control over supervised actions.",
                 "files": [_file_state("pip_control_panel.py")],
-                "api": ["/status", "/proposal/latest", "/memory/latest", "/traces", "/system-manifest", "/scheduler/status"],
+                "api": ["/status", "/proposal/latest", "/memory/latest", "/traces", "/task-runs", "/system-manifest", "/scheduler/status"],
             },
             "scheduler": {
                 "description": "Supervised task queue for long-running or ambient goals.",
                 "files": [_file_state("pip_scheduler.py")],
             },
+            "task_runs": {
+                "description": "Append-only receipts for scheduled jobs, Nightwatch, and background script launches.",
+                "files": [_file_state("pip_task_runs.py")],
+                "task_runs_path": str(memory_path / "pip_task_runs.jsonl"),
+            },
             "model_registry": {
-                "description": "Dynamic mapping of task types to local Ollama models based on capabilities.",
+                "description": "Dynamic mapping of task types to local Ollama models based on capabilities and lightweight fit scoring.",
                 "files": [_file_state("pip_model_registry.py")],
             },
             "memory": {
@@ -125,6 +130,10 @@ def build_manifest() -> dict[str, Any]:
                 "files": [_file_state("pip_app_skills.py")],
                 "summary": _developer_shell_summary(),
             },
+            "security": {
+                "description": "Public-facing safety notes for local/LAN operation, secrets hygiene, and approval boundaries.",
+                "files": [_file_state("SECURITY.md")],
+            },
             "phone_bridge": {
                 "description": "S25 usage import, optimizer, status, and proposal feedback bridge.",
                 "files": [_file_state("pip_phone_bridge.py")],
@@ -139,6 +148,12 @@ def build_manifest() -> dict[str, Any]:
             "Keep execution observable through durable traces.",
             "Preserve module boundaries so local components can be replaced or upgraded later.",
             "Favor supervised actions and explicit handoff contracts over opaque autonomy.",
+        ],
+        "odysseus_takeaways_applied": [
+            "Keep local/LAN security posture explicit.",
+            "Record durable task-run receipts for background work.",
+            "Rank local models with task-fit and hardware-fit metadata before routing heavier tasks.",
+            "Borrow operational discipline without broadening Pip beyond supervised draft-first work.",
         ],
     }
 

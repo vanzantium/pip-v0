@@ -46,6 +46,19 @@ def add_job(name: str, goal: str, schedule_type: str = "once", scope: str = "glo
     }
     jobs.append(new_job)
     _save_jobs(jobs)
+    try:
+        import pip_task_runs
+
+        pip_task_runs.record_task_run(
+            "scheduler",
+            name,
+            "queued",
+            summary=f"Scheduled {schedule_type} job.",
+            details={"job_id": new_job["id"], "goal": goal, "scope": scope},
+            source="pip_scheduler",
+        )
+    except Exception:
+        pass
     return new_job
 
 def pause_job(job_id: str) -> bool:
@@ -54,6 +67,19 @@ def pause_job(job_id: str) -> bool:
         if job["id"] == job_id:
             job["status"] = "paused"
             _save_jobs(jobs)
+            try:
+                import pip_task_runs
+
+                pip_task_runs.record_task_run(
+                    "scheduler",
+                    job.get("name", job_id),
+                    "paused",
+                    summary="Scheduler job paused.",
+                    details={"job_id": job_id},
+                    source="pip_scheduler",
+                )
+            except Exception:
+                pass
             return True
     return False
 
@@ -63,6 +89,19 @@ def resume_job(job_id: str) -> bool:
         if job["id"] == job_id:
             job["status"] = "pending"
             _save_jobs(jobs)
+            try:
+                import pip_task_runs
+
+                pip_task_runs.record_task_run(
+                    "scheduler",
+                    job.get("name", job_id),
+                    "resumed",
+                    summary="Scheduler job resumed.",
+                    details={"job_id": job_id},
+                    source="pip_scheduler",
+                )
+            except Exception:
+                pass
             return True
     return False
 
@@ -74,11 +113,30 @@ def complete_job(job_id: str, result: str) -> bool:
             job["last_run"] = _utc_now()
             job["last_result"] = result
             _save_jobs(jobs)
+            try:
+                import pip_task_runs
+
+                pip_task_runs.record_task_run(
+                    "scheduler",
+                    job.get("name", job_id),
+                    "completed",
+                    summary=result[:300],
+                    details={"job_id": job_id},
+                    source="pip_scheduler",
+                )
+            except Exception:
+                pass
             return True
     return False
 
 def get_status() -> dict[str, Any]:
+    try:
+        import pip_task_runs
+        task_runs = pip_task_runs.inspect_task_runs(limit=8)
+    except Exception as exc:
+        task_runs = {"error": str(exc)}
     return {
         "jobs": _load_jobs(),
-        "updated_at": _utc_now()
+        "updated_at": _utc_now(),
+        "recent_task_runs": task_runs,
     }

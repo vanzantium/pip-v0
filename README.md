@@ -23,10 +23,14 @@ This prototype focuses on the real moat:
 - `pip_control_panel.py` - local web dashboard for phone approval/control
 - `pip_flow_master.py` - safe Flow Master doctrine and pressure-assessment add-on
 - `pip_traces.py` - append-only trace spine for CLI, dashboard, Flow Master, and handoff events
+- `pip_task_runs.py` - append-only task-run receipts for scheduler, Nightwatch, and background scripts
 - `pip_system_manifest.py` - compact self-map of Pip primitives, roots, safety contract, and control surfaces
+- `pip_model_registry.py` - lightweight task-to-local-model fit scoring
 - `approved_workspaces.json` - permission manifest for laptop-side Pip workspaces
+- `SECURITY.md` - cautious local/LAN safety notes and publishing hygiene
 - `HERMES_OPENMYTHOS_COMPARISON.md` - notes on what to borrow from Hermes and OpenMythos
 - `OPENJARVIS_COMPARISON.md` - notes on what to borrow from OpenJarvis without over-expanding Pip
+- `ODYSSEUS_COMPARISON.md` - notes on Odysseus-inspired hardening without over-expanding Pip
 - `DEPLOYMENT_OPTIONS.md` - local S25 versus laptop/chat deployment options
 - `ANDROID_TELEMETRY_SCHEMA.md` - JSON bridge contract between S25 exports and Pip
 - `memory.json` - persistent tattoo/scar/proposal memory created after the first run
@@ -142,6 +146,7 @@ Inspect supervised background jobs:
 ```powershell
 python pip_skills.py run list_jobs
 python pip_skills.py run stop_job --job-id JOB_ID
+python pip_skills.py run inspect_task_runs --limit 10
 ```
 
 Inspect Pip's app skill assessment layer. Blender starts with a small animation-team curriculum so progress can be tracked by domain instead of only by generic app XP:
@@ -193,6 +198,13 @@ python pip_skills.py run refresh_system_manifest
 python pip_skills.py run inspect_system_manifest
 python pip_skills.py run record_trace --trace-kind handoff --summary "Testing Pip trace spine."
 python pip_skills.py run inspect_traces --limit 10
+```
+
+Inspect model-fit routing before choosing a local model for heavier work:
+
+```powershell
+python pip_skills.py run inspect_model_registry
+python pip_skills.py run route_model_task --task-type coding
 ```
 
 Start the phone-friendly local control panel:
@@ -270,7 +282,10 @@ Included:
 - Token Governor bridge for interaction budgeting, Signal Sieve pressure checks, and user-overuse nudges
 - Flow Master doctrine layer for ingest/validate/transform/emit pressure assessment and receipts digests
 - append-only trace spine for skill runs, dashboard actions, Flow Master checks, and later agent handoffs
+- append-only task-run receipts for scheduler, Nightwatch, and background script launches
 - compact system manifest so Pip can describe her own roots, primitives, safety contract, and control surfaces
+- lightweight local model-fit scoring by task type, declared strengths, context, and estimated VRAM
+- cautious `SECURITY.md` guidance for LAN-only operation, approval boundaries, and personal-data hygiene
 
 Not included yet:
 

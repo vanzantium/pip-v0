@@ -286,13 +286,21 @@ def inspect_model_registry(args: argparse.Namespace) -> dict[str, Any]:
     import pip_model_registry
     return {
         "skill": "inspect_model_registry",
-        "registry": pip_model_registry.get_registry(),
+        "registry": pip_model_registry.inspect_registry(),
     }
 
 
 def route_model_task(args: argparse.Namespace) -> dict[str, Any]:
     import pip_model_registry
     return pip_model_registry.run_route(args)
+
+
+def inspect_task_runs(args: argparse.Namespace) -> dict[str, Any]:
+    import pip_task_runs
+    return {
+        "skill": "inspect_task_runs",
+        "status": pip_task_runs.inspect_task_runs(limit=args.limit),
+    }
 
 
 def list_skill_packages(args: argparse.Namespace) -> dict[str, Any]:
@@ -935,6 +943,16 @@ SKILLS: dict[str, tuple[SkillSpec, Callable[[argparse.Namespace], dict[str, Any]
             permissions=["read memory folder"],
         ),
         route_model_task,
+    ),
+    "inspect_task_runs": (
+        SkillSpec(
+            name="inspect_task_runs",
+            description="Inspect durable task-run receipts for scheduled jobs, Nightwatch, and background scripts.",
+            inputs=["--limit 20"],
+            outputs=["pip_task_runs.jsonl receipt summary"],
+            permissions=["read memory folder"],
+        ),
+        inspect_task_runs,
     ),
     "list_skill_packages": (
         SkillSpec(

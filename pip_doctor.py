@@ -26,6 +26,7 @@ REQUIRED_FILES = [
     "pip_blender_recipes.py",
     "pip_flow_master.py",
     "pip_traces.py",
+    "pip_task_runs.py",
     "pip_system_manifest.py",
     "pip_scheduler.py",
     "pip_background_tasks.py",
@@ -50,6 +51,8 @@ REQUIRED_FILES = [
     "ANDROID_TELEMETRY_SCHEMA.md",
     "HERMES_OPENMYTHOS_COMPARISON.md",
     "OPENJARVIS_COMPARISON.md",
+    "ODYSSEUS_COMPARISON.md",
+    "SECURITY.md",
 ]
 
 
@@ -144,8 +147,17 @@ def main() -> None:
             failures.append("dashboard should request approval before starting Nightwatch")
         if 'Dashboard ran efficiency script.' in control_source:
             failures.append("dashboard should request approval before running efficiency scripts")
+        if "/task-runs" not in control_source:
+            failures.append("dashboard should expose task-run receipts at /task-runs")
     except Exception as exc:
         failures.append(f"dashboard source consistency check failed: {exc}")
+
+    try:
+        dashboard_template = (root / "dashboard_ui" / "template.html").read_text(encoding="utf-8")
+        if "Task Run Receipts" not in dashboard_template:
+            failures.append("dashboard should render task-run receipts")
+    except Exception as exc:
+        failures.append(f"dashboard template consistency check failed: {exc}")
 
     try:
         workspace_source = (root / "pip_workspace.py").read_text(encoding="utf-8")
@@ -211,6 +223,7 @@ def main() -> None:
     try:
         import pip_config
         import pip_traces
+        import pip_task_runs
         import pip_system_manifest
 
         original_memory_path = pip_config.get_memory_path
@@ -227,9 +240,27 @@ def main() -> None:
             latest_ids = {event.get("id") for event in trace_status.get("latest", [])}
             if trace.get("id") not in latest_ids:
                 failures.append("trace spine should return the event it just wrote")
+            task_run = pip_task_runs.start_task_run(
+                "doctor_check",
+                "task_run_roundtrip",
+                summary="Doctor task-run receipt roundtrip.",
+                source="pip_doctor",
+            )
+            pip_task_runs.finish_task_run(
+                task_run["id"],
+                "doctor_check",
+                "task_run_roundtrip",
+                "completed",
+                summary="Doctor task-run receipt completed.",
+                source="pip_doctor",
+            )
+            task_run_status = pip_task_runs.inspect_task_runs(limit=5)
+            task_run_ids = {event.get("id") for event in task_run_status.get("latest", [])}
+            if task_run["id"] not in task_run_ids:
+                failures.append("task-run receipts should return the run they just wrote")
             manifest = pip_system_manifest.save_manifest()
             primitives = manifest.get("primitives", {})
-            for primitive in ["skills", "workspace_loop", "control_panel", "trace_spine", "governors"]:
+            for primitive in ["skills", "workspace_loop", "control_panel", "trace_spine", "task_runs", "governors"]:
                 if primitive not in primitives:
                     failures.append(f"system manifest missing primitive: {primitive}")
             if not (temp_root / "pip_system_manifest.json").exists():
@@ -242,6 +273,19 @@ def main() -> None:
             pip_config.get_memory_path = original_memory_path
         except Exception:
             pass
+
+    try:
+        import pip_model_registry
+        registry_status = pip_model_registry.inspect_registry()
+        if not registry_status.get("fit_examples"):
+            failures.append("model registry should expose fit examples")
+        route = pip_model_registry.run_route(argparse.Namespace(task_type="coding"))
+        if not route.get("recommended_model") or not route.get("candidates"):
+            failures.append("model registry should return a recommendation and scored candidates")
+        if "score" not in route["candidates"][0]:
+            failures.append("model registry candidates should include fit scores")
+    except Exception as exc:
+        failures.append(f"model registry consistency check failed: {exc}")
 
     try:
         import pip_config

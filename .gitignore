@@ -37,6 +37,7 @@ skills/dummy_skill/
 # Pip memory/state artifacts if the memory folder is pointed inside this repo
 pip memory*/
 pip_traces.jsonl
+pip_task_runs.jsonl
 pip_system_manifest.json
 pip_scheduler.json
 pip_persona_memory.json

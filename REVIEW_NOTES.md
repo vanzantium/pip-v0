@@ -18,14 +18,16 @@ The fair framing is: Pip can inspect, condense, propose, queue, and learn from l
 ## Recently Added
 
 - `pip_traces.py` adds an append-only trace spine for skill runs, Flow Master checks, dashboard actions, and future handoffs.
+- `pip_task_runs.py` adds append-only receipts for scheduler events, Nightwatch launches, and background script runs.
 - `pip_system_manifest.py` gives Pip a compact self-map of roots, primitives, safety contract, and control surfaces.
 - `pip_skill_registry.py` adds portable local skill packages from `skills/`.
 - `skills/brain_io/` moves brain file search/read/write and macro recording into a declared portable skill bundle.
-- `pip_model_registry.py` adds early local model routing metadata for Ollama-style models.
+- `pip_model_registry.py` adds early local model routing metadata and lightweight fit scoring for Ollama-style models.
 - `pip_scheduler.py` adds a simple supervised scheduler state file.
 - `pip_background_tasks.py` adds controlled background script launching helpers.
 - `pip_self_model.py`, `pip_self_reflection.py`, `pip_dynamic_prompt.py`, `pip_embeddings.py`, and `pip_finetune_curator.py` add early self-model/RAG/fine-tune curation scaffolding.
 - `pip_flow_master.py` adds safe text-pressure assessment. It does not block apps or monitor device input.
+- `SECURITY.md` documents cautious local/LAN operation, approval boundaries, and publishing hygiene.
 
 ## Safety Notes
 
@@ -42,6 +44,7 @@ The fair framing is: Pip can inspect, condense, propose, queue, and learn from l
 - Review local model routing assumptions against the user's real installed models and hardware.
 - Confirm memory files do not leak personal paths or private usage data into GitHub.
 - Check dashboard wording so it communicates capability without overstating autonomy.
+- Confirm task-run receipts are useful for auditing without storing sensitive content.
 
 ## Smoke Test Commands
 
@@ -51,6 +54,7 @@ python test_scenarios.py --scenarios scenarios
 python pip_skills.py run list_skill_packages
 python pip_skills.py run inspect_model_registry
 python pip_skills.py run route_model_task --task-type coding
+python pip_skills.py run inspect_task_runs --limit 10
 python pip_skills.py run refresh_system_manifest
 ```
 
