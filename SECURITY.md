@@ -27,7 +27,13 @@ Safe default work is limited to approved reads, Pip memory writes, draft-folder 
 
 The dashboard is designed for the user's laptop and phone on the same Wi-Fi. It does not currently provide production-grade authentication, rate limiting, or transport encryption.
 
+Mutating dashboard requests use a per-server token injected into Pip-rendered pages. This blocks casual cross-site POSTs and stale external forms, but it is not a substitute for real authentication if the port is exposed beyond a trusted LAN.
+
 If you need remote access later, put it behind a reviewed authenticated tunnel or reverse proxy instead of opening the port directly.
+
+## Portable Skills
+
+Portable skills are listed from JSON manifests first. Trusted built-in packages are lazy-loaded only when the selected skill runs, so `pip_skills.py list` should not execute arbitrary skill code. New third-party skill packages should stay untrusted until reviewed.
 
 ## Secrets And Personal Data
 

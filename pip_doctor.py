@@ -149,6 +149,10 @@ def main() -> None:
             failures.append("dashboard should request approval before running efficiency scripts")
         if "/task-runs" not in control_source:
             failures.append("dashboard should expose task-run receipts at /task-runs")
+        if "validate_post_token" not in control_source or "_pip_token" not in control_source:
+            failures.append("dashboard POST routes should require a per-server token")
+        if 'parsed.path == "/system/enable-startup"' in control_source and "request_safety_permission(\n                    \"enable_startup\"" not in control_source:
+            failures.append("dashboard startup enable should be permission-gated")
     except Exception as exc:
         failures.append(f"dashboard source consistency check failed: {exc}")
 
@@ -156,6 +160,8 @@ def main() -> None:
         dashboard_template = (root / "dashboard_ui" / "template.html").read_text(encoding="utf-8")
         if "Task Run Receipts" not in dashboard_template:
             failures.append("dashboard should render task-run receipts")
+        if "_pip_token" not in dashboard_template:
+            failures.append("dashboard forms should include token injection")
     except Exception as exc:
         failures.append(f"dashboard template consistency check failed: {exc}")
 
@@ -175,6 +181,15 @@ def main() -> None:
             failures.append(f"platform feature status missing keys: {sorted(missing)}")
     except Exception as exc:
         failures.append(f"platform compatibility check failed: {exc}")
+
+    try:
+        skill_registry_source = (root / "pip_skill_registry.py").read_text(encoding="utf-8")
+        if "_lazy_runner" not in skill_registry_source or "BUILTIN_TRUSTED_PACKAGES" not in skill_registry_source:
+            failures.append("portable skills should be manifest-listed and lazily imported from trusted packages only")
+        if "spec.loader.exec_module(module)" in skill_registry_source.split("def load_portable_skills", 1)[-1].split("def list_skill_packages", 1)[0]:
+            failures.append("load_portable_skills should not execute portable skill code during CLI startup")
+    except Exception as exc:
+        failures.append(f"portable skill registry consistency check failed: {exc}")
 
     try:
         import pip_app_skills
@@ -258,6 +273,8 @@ def main() -> None:
             task_run_ids = {event.get("id") for event in task_run_status.get("latest", [])}
             if task_run["id"] not in task_run_ids:
                 failures.append("task-run receipts should return the run they just wrote")
+            if not task_run_status.get("bounded_read"):
+                failures.append("task-run inspection should use bounded reads")
             manifest = pip_system_manifest.save_manifest()
             primitives = manifest.get("primitives", {})
             for primitive in ["skills", "workspace_loop", "control_panel", "trace_spine", "task_runs", "governors"]:
@@ -279,6 +296,8 @@ def main() -> None:
         registry_status = pip_model_registry.inspect_registry()
         if not registry_status.get("fit_examples"):
             failures.append("model registry should expose fit examples")
+        if pip_model_registry.available_vram_mb() < 0:
+            failures.append("model registry VRAM estimate should never be negative")
         route = pip_model_registry.run_route(argparse.Namespace(task_type="coding"))
         if not route.get("recommended_model") or not route.get("candidates"):
             failures.append("model registry should return a recommendation and scored candidates")
@@ -286,6 +305,13 @@ def main() -> None:
             failures.append("model registry candidates should include fit scores")
     except Exception as exc:
         failures.append(f"model registry consistency check failed: {exc}")
+
+    try:
+        app_scanner_source = (root / "pip_app_scanner.py").read_text(encoding="utf-8")
+        if 'shell_entry["enabled"] = True' in app_scanner_source or '"Cursor", "enabled": True' in app_scanner_source:
+            failures.append("app scanner should suggest developer tools instead of auto-enabling them")
+    except Exception as exc:
+        failures.append(f"app scanner consistency check failed: {exc}")
 
     try:
         import pip_config

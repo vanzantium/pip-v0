@@ -372,6 +372,7 @@ def classify_action_permission(action_type: str) -> dict[str, Any]:
         "ui_automation",
         "keyboard_recording",
         "system_optimization",
+        "enable_startup",
     }
     if normalized in auto_allowed:
         return {

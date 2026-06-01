@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import html
 import json
+import secrets
 import socket
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -104,6 +105,23 @@ def start_nightwatch_loop() -> dict[str, Any]:
     return {"ok": True, "message": "Nightwatch background loop started."}
 
 
+def enable_startup() -> dict[str, Any]:
+    if not pip_platform.is_windows():
+        return {"ok": False, "message": "Startup shortcut creation is currently Windows-only."}
+    import os
+
+    startup_dir = Path(os.environ.get("APPDATA", "")) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"
+    if not startup_dir.exists():
+        return {"ok": False, "message": "Windows Startup folder not found."}
+    vbs_path = startup_dir / "pip_nightwatch.vbs"
+    pythonw_exe = Path(sys.executable).parent / "pythonw.exe"
+    if not pythonw_exe.exists():
+        pythonw_exe = Path("pythonw")
+    script_content = f'Set WshShell = CreateObject("WScript.Shell")\nWshShell.Run "{pythonw_exe} ""{Path(__file__).parent / "pip_nightwatch_loop.py"}""", 0, False\n'
+    vbs_path.write_text(script_content, encoding="utf-8")
+    return {"ok": True, "message": "Created silent Pip startup VBS.", "path": str(vbs_path)}
+
+
 def _safe_form_int(form: dict[str, list[str]], key: str, default: int = -1) -> int:
     try:
         return int((form.get(key) or [str(default)])[0])
@@ -136,9 +154,10 @@ def page(status: dict[str, Any]) -> str:
         checked = "checked" if app.get("enabled") else ""
         level = app.get("level", 1)
         xp = app.get("xp", 0)
+        suggested = " <span class='small' style='color:var(--moss);'>(suggested)</span>" if app.get("suggested") else ""
         apps_html += f"""
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-            <label><input type="checkbox" name="app_{html.escape(app['name'])}" {checked}> {html.escape(app['name'])}</label>
+            <label><input type="checkbox" name="app_{html.escape(app['name'])}" {checked}> {html.escape(app['name'])}{suggested}</label>
             <span class="small" style="background: var(--leaf); padding: 2px 6px; border-radius: 4px;">Lvl {level} ({xp}xp)</span>
         </div>
         """
@@ -458,6 +477,7 @@ def page(status: dict[str, Any]) -> str:
 
     
     # --- Pre-computations for Template ---
+    dashboard_token = html.escape(PipHandler.dashboard_token)
     escaped_memory_path = html.escape(str(memory_path))
     escaped_proposal_text = html.escape(proposal_text)
     platform_os = html.escape(platform_status.get('os', 'Unknown'))
@@ -770,6 +790,8 @@ def fairy_page() -> str:
 <a class="fulllink" href="/" target="_blank" style="left:10px;">open full panel</a>
 
 <script>
+  const PIP_TOKEN = "__PIP_TOKEN__";
+
   async function uploadAvatar() {
     const file = document.getElementById('avatar_file').files[0];
     if (!file) return;
@@ -778,7 +800,7 @@ def fairy_page() -> str:
       const b64 = reader.result.split(',')[1];
       await fetch('/upload-avatar', {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        headers: {'Content-Type': 'application/json', 'X-Pip-Token': PIP_TOKEN},
         body: JSON.stringify({image: b64, filename: file.name})
       });
       location.reload();
@@ -790,7 +812,7 @@ def fairy_page() -> str:
   const badge = document.getElementById('badge');
 
   async function revertAvatar() {
-    await fetch('/revert-avatar', {method: 'POST'});
+    await fetch('/revert-avatar', {method: 'POST', headers: {'X-Pip-Token': PIP_TOKEN}});
     location.reload();
   }
 
@@ -820,7 +842,7 @@ def fairy_page() -> str:
       await fetch('/feedback', {
         method: 'POST',
         headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-        body: 'status=' + status + '&note='
+        body: 'status=' + status + '&note=&_pip_token=' + encodeURIComponent(PIP_TOKEN)
       });
     } catch(_) {}
   }
@@ -869,7 +891,7 @@ def fairy_page() -> str:
       const res = await fetch('/chat', {
         method: 'POST',
         headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-        body: 'msg=' + encodeURIComponent(txt)
+        body: 'msg=' + encodeURIComponent(txt) + '&_pip_token=' + encodeURIComponent(PIP_TOKEN)
       }).then(r => r.json());
 
       const pmsg = document.createElement('div');
@@ -894,12 +916,13 @@ def fairy_page() -> str:
 </script>
 </body>
 </html>"""
-    return html_str.replace("__SPRITE_HTML__", sprite_html)
+    return html_str.replace("__SPRITE_HTML__", sprite_html).replace("__PIP_TOKEN__", PipHandler.dashboard_token)
 
 
 class PipHandler(BaseHTTPRequestHandler):
     workspace_key = "garden_spiders"
     manifest_path = "approved_workspaces.json"
+    dashboard_token = secrets.token_urlsafe(24)
 
     def log_message(self, format: str, *args: Any) -> None:
         print(f"{self.address_string()} - {format % args}")
@@ -918,9 +941,31 @@ class PipHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def read_body(self) -> dict[str, list[str]]:
-        length = int(self.headers.get("Content-Length", "0"))
-        body = self.rfile.read(length).decode("utf-8") if length else ""
+        if not hasattr(self, "_cached_body"):
+            length = int(self.headers.get("Content-Length", "0"))
+            self._cached_body = self.rfile.read(length) if length else b""
+        body = self._cached_body.decode("utf-8", errors="replace") if self._cached_body else ""
         return parse_qs(body)
+
+    def read_json_body(self) -> dict[str, Any]:
+        if not hasattr(self, "_cached_body"):
+            length = int(self.headers.get("Content-Length", "0"))
+            self._cached_body = self.rfile.read(length) if length else b""
+        if not self._cached_body:
+            return {}
+        payload = json.loads(self._cached_body.decode("utf-8"))
+        return payload if isinstance(payload, dict) else {}
+
+    def validate_post_token(self, parsed: Any) -> bool:
+        query = parse_qs(parsed.query)
+        supplied = self.headers.get("X-Pip-Token") or (query.get("pip_token") or [""])[0]
+        content_type = self.headers.get("Content-Type", "")
+        if not supplied and "application/json" not in content_type:
+            supplied = (self.read_body().get("_pip_token") or [""])[0]
+        if secrets.compare_digest(str(supplied), self.dashboard_token):
+            return True
+        self.send_json({"error": "dashboard token required"}, status=403)
+        return False
 
     def trace_dashboard_action(
         self,
@@ -1069,19 +1114,22 @@ class PipHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         parsed = urlparse(self.path)
         try:
+            if not self.validate_post_token(parsed):
+                return
             if parsed.path == "/system/enable-startup":
-                import os
-                import sys
-                from pathlib import Path
-                startup_dir = Path(os.environ.get("APPDATA", "")) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"
-                if startup_dir.exists():
-                    vbs_path = startup_dir / "pip_nightwatch.vbs"
-                    pythonw_exe = Path(sys.executable).parent / "pythonw.exe"
-                    if not pythonw_exe.exists():
-                        pythonw_exe = "pythonw"
-                    script_content = f'Set WshShell = CreateObject("WScript.Shell")\\nWshShell.Run "{pythonw_exe} ""{Path(__file__).parent / "pip_nightwatch_loop.py"}""", 0, False\\n'
-                    vbs_path.write_text(script_content, encoding="utf-8")
-                    self.trace_dashboard_action("enable_startup", "Created silent Pip startup VBS in Windows Startup folder.")
+                request_safety_permission(
+                    "enable_startup",
+                    title="Approve Pip startup shortcut",
+                    rationale="Create a Windows Startup folder shortcut that can launch Pip Nightwatch after login.",
+                    workspace_key=self.workspace_key,
+                    manifest_path=self.manifest_path,
+                    details={"source": "dashboard"},
+                )
+                self.trace_dashboard_action(
+                    "enable_startup",
+                    "Dashboard requested startup shortcut approval.",
+                    status="permission_requested",
+                )
                 self.redirect_home()
                 return
             elif parsed.path == "/run-scan":
@@ -1342,6 +1390,14 @@ if ($f.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                     script_name = details.get("script", "")
                     if script_name:
                         pip_background_tasks.run_script(script_name, silent=bool(details.get("silent")))
+                elif decision == "approved" and resolved.get("action_type") == "enable_startup":
+                    startup_result = enable_startup()
+                    self.trace_dashboard_action(
+                        "enable_startup_apply",
+                        startup_result.get("message", "Startup shortcut action finished."),
+                        status="ok" if startup_result.get("ok") else "failed",
+                        details=startup_result,
+                    )
                 self.trace_dashboard_action(
                     "permission",
                     "Dashboard resolved a permission request.",
@@ -1469,12 +1525,11 @@ if ($f.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                 import base64
                 from pathlib import Path
                 import io
-                length = int(self.headers.get("Content-Length", "0"))
-                if length > 5 * 1024 * 1024:
+                content_length = int(self.headers.get("Content-Length", "0"))
+                if content_length > 5 * 1024 * 1024:
                     self.send_json({"error": "avatar upload too large"}, status=413)
                     return
-                body = self.rfile.read(length).decode("utf-8") if length else "{}"
-                data = json.loads(body)
+                data = self.read_json_body()
                 b64_img = data.get("image", "")
                 filename = data.get("filename", "avatar.png")
                 

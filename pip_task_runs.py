@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import uuid
+from collections import deque
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -144,26 +145,47 @@ def _load_events(path: Path) -> tuple[list[dict[str, Any]], int]:
 
 def inspect_task_runs(limit: int = 20, kind: str | None = None, status: str | None = None) -> dict[str, Any]:
     path = run_path()
-    events, skipped = _load_events(path)
-    filtered = events
-    if kind:
-        filtered = [event for event in filtered if event.get("kind") == kind]
-    if status:
-        filtered = [event for event in filtered if event.get("status") == status]
+    limit = max(1, int(limit))
+    latest: deque[dict[str, Any]] = deque(maxlen=limit)
+    skipped = 0
+    total_events = 0
+    matching_events = 0
     by_kind: dict[str, int] = {}
     by_status: dict[str, int] = {}
-    for event in events:
-        by_kind[event.get("kind", "task")] = by_kind.get(event.get("kind", "task"), 0) + 1
-        by_status[event.get("status", "unknown")] = by_status.get(event.get("status", "unknown"), 0) + 1
+    if path.exists():
+        with path.open("r", encoding="utf-8", errors="replace") as handle:
+            for line in handle:
+                if not line.strip():
+                    continue
+                try:
+                    parsed = json.loads(line)
+                    if not isinstance(parsed, dict):
+                        skipped += 1
+                        continue
+                except json.JSONDecodeError:
+                    skipped += 1
+                    continue
+                total_events += 1
+                event_kind = parsed.get("kind", "task")
+                event_status = parsed.get("status", "unknown")
+                by_kind[event_kind] = by_kind.get(event_kind, 0) + 1
+                by_status[event_status] = by_status.get(event_status, 0) + 1
+                if kind and event_kind != kind:
+                    continue
+                if status and event_status != status:
+                    continue
+                matching_events += 1
+                latest.append(parsed)
     return {
         "generated_at": utc_now(),
         "task_runs_path": str(path),
         "exists": path.exists(),
-        "total_events": len(events),
-        "matching_events": len(filtered),
+        "total_events": total_events,
+        "matching_events": matching_events,
         "skipped_lines": skipped,
         "by_kind": by_kind,
         "by_status": by_status,
-        "latest": filtered[-max(1, int(limit)) :],
+        "latest": list(latest),
         "append_only": True,
+        "bounded_read": True,
     }

@@ -377,5 +377,16 @@
   </section>
 
 </main>
+<script>
+  const pipDashboardToken = "{dashboard_token}";
+  document.querySelectorAll('form[method="post"], form[method="POST"]').forEach((form) => {{
+    if (form.querySelector('input[name="_pip_token"]')) return;
+    const token = document.createElement("input");
+    token.type = "hidden";
+    token.name = "_pip_token";
+    token.value = pipDashboardToken;
+    form.appendChild(token);
+  }});
+</script>
 </body>
 </html>

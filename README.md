@@ -26,6 +26,7 @@ This prototype focuses on the real moat:
 - `pip_task_runs.py` - append-only task-run receipts for scheduler, Nightwatch, and background scripts
 - `pip_system_manifest.py` - compact self-map of Pip primitives, roots, safety contract, and control surfaces
 - `pip_model_registry.py` - lightweight task-to-local-model fit scoring
+- `pip_skill_registry.py` - manifest-first portable skill registry with lazy trusted-package loading
 - `approved_workspaces.json` - permission manifest for laptop-side Pip workspaces
 - `SECURITY.md` - cautious local/LAN safety notes and publishing hygiene
 - `HERMES_OPENMYTHOS_COMPARISON.md` - notes on what to borrow from Hermes and OpenMythos
@@ -274,6 +275,7 @@ Included:
 - approved Garden Spiders workspace scanning
 - draft-only project digest, next-action proposal, and control status exports
 - local web control panel for S25 browser approval/rejection/defer feedback
+- per-server dashboard POST token for local/LAN mutation protection
 - supervised ambient cycle state, transcripts, next-wake scheduling, and permission queue
 - visible background job status/logs with cooperative stop requests
 - app skill profiles with Blender domains for navigation, modeling, materials, animation, Python automation, and rendering
@@ -285,6 +287,7 @@ Included:
 - append-only task-run receipts for scheduler, Nightwatch, and background script launches
 - compact system manifest so Pip can describe her own roots, primitives, safety contract, and control surfaces
 - lightweight local model-fit scoring by task type, declared strengths, context, and estimated VRAM
+- manifest-listed portable skills that lazy-load trusted built-in packages instead of executing on CLI startup
 - cautious `SECURITY.md` guidance for LAN-only operation, approval boundaries, and personal-data hygiene
 
 Not included yet:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import argparse
 import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -77,6 +78,11 @@ def available_vram_mb() -> int:
                 for key in ("vram_mb", "available_vram_mb"):
                     if key in gpu:
                         return max(0, int(float(gpu[key] or 0)))
+            elif isinstance(gpu, str):
+                numbers = [int(value) for value in re.findall(r"\b\d{7,}\b", gpu)]
+                if numbers:
+                    # Older Windows scanner output included AdapterRAM bytes in the GPU string.
+                    return max(numbers) // (1024 * 1024)
     except Exception:
         pass
     return 0
@@ -111,6 +117,9 @@ def score_models(task_type: str, available_mb: int | None = None) -> list[dict[s
         if task in {"formatting", "fast_replies", "json_extraction", "chat"}:
             size_penalty = min(12, int(vram_cost / 1000))
         score = max(0, min(100, strength_score + fit_score + context_score - size_penalty))
+        if available > 0 and vram_cost > available:
+            # A model that probably will not fit should remain visible but not win routing.
+            score = min(score, 60)
         scored.append(
             {
                 "model": model_name,

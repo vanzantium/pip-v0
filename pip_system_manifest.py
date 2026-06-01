@@ -87,7 +87,7 @@ def build_manifest() -> dict[str, Any]:
                 "files": [_file_state("pip_skills.py")],
             },
             "portable_skills": {
-                "description": "Dynamic skill bundles loaded from the skills/ directory.",
+                "description": "Manifest-listed skill bundles from skills/ with lazy trusted-package loading.",
                 "files": [_file_state("pip_skill_registry.py"), _file_state("skills")],
             },
             "workspace_loop": {
@@ -95,7 +95,7 @@ def build_manifest() -> dict[str, Any]:
                 "files": [_file_state("pip_workspace.py"), _file_state("approved_workspaces.json")],
             },
             "control_panel": {
-                "description": "Local LAN dashboard for S25/browser control over supervised actions.",
+                "description": "Local LAN dashboard for S25/browser control over supervised actions, with per-server POST token protection.",
                 "files": [_file_state("pip_control_panel.py")],
                 "api": ["/status", "/proposal/latest", "/memory/latest", "/traces", "/task-runs", "/system-manifest", "/scheduler/status"],
             },

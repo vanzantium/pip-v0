@@ -130,27 +130,29 @@ def scan_and_save():
             
     final_list = list(existing_map.values())
     
-    # Force inject known developer shells that might not appear in OS app registries.
+    # Suggest known developer shells that might not appear in OS app registries.
+    # The user still explicitly enables interaction from the dashboard.
     for shell_entry in pip_app_skills.developer_shell_app_entries():
         found = False
         for a in final_list:
             if a["name"].lower() == shell_entry["name"].lower():
-                a["enabled"] = True
+                a["suggested"] = True
                 found = True
                 break
         if not found:
-            shell_entry["enabled"] = True
+            shell_entry["enabled"] = False
+            shell_entry["suggested"] = True
             final_list.append(shell_entry)
             
-    # Also explicitly add Cursor if missing
+    # Also explicitly suggest Cursor if missing.
     cursor_found = False
     for a in final_list:
         if a["name"].lower() == "cursor":
-            a["enabled"] = True
+            a["suggested"] = True
             cursor_found = True
             break
     if not cursor_found:
-        final_list.append({"name": "Cursor", "enabled": True, "level": 1, "xp": 0})
+        final_list.append({"name": "Cursor", "enabled": False, "suggested": True, "level": 1, "xp": 0})
             
     final_list.sort(key=lambda x: x["name"])
     

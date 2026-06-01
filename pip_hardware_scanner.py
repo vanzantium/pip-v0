@@ -111,6 +111,39 @@ def get_gpu_info() -> str:
         pass
     return "Unknown GPU"
 
+
+def get_vram_mb() -> int:
+    if not pip_platform.is_windows():
+        return 0
+    script = """
+    Get-CimInstance Win32_VideoController |
+      Select-Object Name,AdapterRAM |
+      ConvertTo-Json -Compress
+    """
+    try:
+        output = subprocess.check_output(
+            ["powershell", "-NoProfile", "-Command", script],
+            text=True,
+            timeout=10,
+            **pip_platform.hidden_subprocess_kwargs(),
+        ).strip()
+        if not output:
+            return 0
+        raw = json.loads(output)
+        if isinstance(raw, dict):
+            raw = [raw]
+        values = []
+        for item in raw:
+            try:
+                adapter_ram = int(item.get("AdapterRAM") or 0)
+            except Exception:
+                adapter_ram = 0
+            if adapter_ram > 0:
+                values.append(adapter_ram // (1024 * 1024))
+        return max(values) if values else 0
+    except Exception:
+        return 0
+
 def get_ollama_recommendation(ram_gb: float) -> dict:
     if ram_gb < 8.0:
         return {
@@ -179,6 +212,7 @@ def scan_and_save(optimize: bool = False) -> dict:
     report = {
         "cpu": get_cpu_name(),
         "gpu": get_gpu_info(),
+        "vram_mb": get_vram_mb(),
         "ram_gb": round(ram, 1),
         "os": platform.system() or "Unknown",
         "memory_optimized": optimized,
