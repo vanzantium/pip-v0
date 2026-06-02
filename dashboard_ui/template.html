@@ -183,10 +183,20 @@
     <h2>Token Governor</h2>
     <span class="pill">Mode: {gov_mode}</span>
     <span class="pill">Daily remaining: {gov_pct}%</span>
+    <span class="pill">Prompt Guard: {guard_verdict}</span>
     <p class="small">{gov_nudge}</p>
+    <p class="small"><strong>Prompt guard score:</strong> {guard_score_text}</p>
     <p class="small"><strong>Signal bridge:</strong> {gov_signal}</p>
     <div class="scroll-box" style="max-height:150px;">
       {gov_events}
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Tool Memory Rules</h2>
+    <p class="small">OpenHuman-inspired tool-scoped rules: durable boundaries Pip should remember for specific apps, skills, or future hands.</p>
+    <div class="scroll-box" style="max-height:220px;">
+      {tool_rules_html}
     </div>
   </section>
 
@@ -226,6 +236,28 @@
       {task_runs_html}
     </div>
     <p class="small" style="margin-top:10px;"><a href="/task-runs" style="color:var(--moss);">Open task-run JSON</a></p>
+  </section>
+
+  <section class="card">
+    <h2>Weekly Update</h2>
+    <span class="pill">Mode: Draft Only</span>
+    <span class="pill">Status: {repo_status_label}</span>
+    <p class="small"><strong>{repo_proposal_text}</strong></p>
+    <p class="small">{repo_evidence}</p>
+    <p class="small"><strong>Last scan:</strong> {repo_last_scan}</p>
+    <ul class="small">{repo_actions_html}</ul>
+    <div class="actions">
+      <form method="post" action="/repo-watch/scan">
+        <button class="quiet" type="submit">Run Weekly Update</button>
+      </form>
+      <form method="post" action="/repo-watch/schedule">
+        <button class="secondary" type="submit">Enable Weekly Update</button>
+      </form>
+      <form method="post" action="/repo-watch/disable">
+        <button class="quiet" type="submit">Disable</button>
+      </form>
+    </div>
+    <p class="small">Separate from Nightwatch. Reads public GitHub metadata only, prefers proven/repeated concepts, drafts audited suggestions, and never installs or changes code automatically.</p>
   </section>
 
   <section class="card">
@@ -335,6 +367,33 @@
         <button class="secondary" type="submit">Sync Device</button>
       </div>
     </form>
+  </section>
+
+  <section class="card">
+    <h2>Gmail Draft Organizer</h2>
+    <span class="pill">Mode: Draft Only</span>
+    <span class="pill">Status: {gmail_status_label}</span>
+    <p class="small"><strong>{gmail_proposal_text}</strong></p>
+    <p class="small">{gmail_evidence}</p>
+    <p class="small"><strong>Priority mix:</strong> {gmail_counts}</p>
+    <div class="scroll-box" style="max-height:240px;margin-bottom:12px;">
+      {gmail_items_html}
+    </div>
+    <form method="post" action="/gmail/summary-import">
+      <p><textarea name="gmail_summary" placeholder="Paste CSV rows: from,subject,snippet,received_at,unread,has_attachment,labels" style="width:100%;height:90px;border-radius:8px;padding:8px;"></textarea></p>
+      <div class="actions">
+        <button class="secondary" type="submit">Draft Gmail Organization</button>
+      </div>
+    </form>
+    <form method="post" action="/gmail/feedback" style="margin-top:12px;">
+      <input type="hidden" name="note" value="Reviewed from Pip dashboard.">
+      <div class="actions">
+        <button type="submit" name="feedback" value="accepted">Looks Good</button>
+        <button class="quiet" type="submit" name="feedback" value="deferred">Later</button>
+        <button class="secondary" type="submit" name="feedback" value="rejected">Revise</button>
+      </div>
+    </form>
+    <p class="small">No Gmail login, API access, sending, deleting, archiving, labeling, or contact access happens in this phase.</p>
   </section>
 
   <section class="card">

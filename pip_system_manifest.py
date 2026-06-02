@@ -122,8 +122,13 @@ def build_manifest() -> dict[str, Any]:
                 "trace_path": str(memory_path / "pip_traces.jsonl"),
             },
             "governors": {
-                "description": "Token Governor, Signal Sieve bridge, and Flow Master pressure pacing.",
-                "files": [_file_state("pip_token_guard.py"), _file_state("pip_flow_master.py")],
+                "description": "Token Governor, Signal Sieve bridge, Prompt Guard, and Flow Master pressure pacing.",
+                "files": [_file_state("pip_token_guard.py"), _file_state("pip_prompt_guard.py"), _file_state("pip_flow_master.py")],
+            },
+            "tool_memory": {
+                "description": "Tool-scoped durable rules for app/tool boundaries and high-priority operating constraints.",
+                "files": [_file_state("pip_tool_memory.py")],
+                "rules_path": str(memory_path / "tool_memory_rules.json"),
             },
             "developer_shells": {
                 "description": "Pre-established approval-gated shells for Codex, Claude Code, and Antigravity.",
@@ -137,6 +142,21 @@ def build_manifest() -> dict[str, Any]:
             "phone_bridge": {
                 "description": "S25 usage import, optimizer, status, and proposal feedback bridge.",
                 "files": [_file_state("pip_phone_bridge.py")],
+            },
+            "gmail_bridge": {
+                "description": "Draft-only manual Gmail summary import plus future read-only connector contract. No Gmail write access.",
+                "files": [_file_state("pip_gmail_bridge.py"), _file_state("GMAIL_CONNECTOR_ROADMAP.md")],
+                "drafts_path": str(memory_path / "gmail_drafts"),
+            },
+            "repo_watch": {
+                "description": "Draft-only public GitHub repo watcher used by the opt-in Weekly Update system.",
+                "files": [_file_state("pip_repo_watch.py"), _file_state("pip_weekly_update.py"), _file_state("repo_watch_config.json")],
+                "watch_path": str(memory_path / "repo_watch"),
+            },
+            "weekly_update": {
+                "description": "Separate opt-in industry-watch loop for audited system update suggestions. Independent from Nightwatch.",
+                "files": [_file_state("pip_weekly_update.py")],
+                "status_path": str(memory_path / "weekly_update_status.json"),
             },
             "pc_bridge": {
                 "description": "PC usage import/status and Windows foreground tracker adapter.",
@@ -154,6 +174,11 @@ def build_manifest() -> dict[str, Any]:
             "Record durable task-run receipts for background work.",
             "Rank local models with task-fit and hardware-fit metadata before routing heavier tasks.",
             "Borrow operational discipline without broadening Pip beyond supervised draft-first work.",
+        ],
+        "openhuman_takeaways_applied": [
+            "Add a prompt-injection preflight guard before admitting chat/tool work.",
+            "Store tool-scoped durable rules under Pip memory instead of scattering boundaries across prompts.",
+            "Defer hosted OAuth integrations and broad external tools until policy boundaries are stronger.",
         ],
     }
 

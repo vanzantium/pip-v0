@@ -8,6 +8,7 @@ Pip v0 is a local, supervised assistant prototype. Treat it like a trusted local
 - Do not expose the control panel directly to the public internet.
 - Keep Pip in draft-only mode unless a specific action is approved.
 - Review portable skills before enabling broader permissions.
+- Treat prompt-guard and tool-memory rules as safety aids, not full security boundaries.
 - Keep phone usage exports, memory files, traces, and scheduler receipts out of Git.
 
 ## Approval Boundaries
@@ -20,8 +21,21 @@ Pip should require approval before:
 - controlling apps or UI
 - recording keyboard or mouse macros
 - sending messages or touching external services
+- connecting to Gmail, reading live email, or changing email state
 
 Safe default work is limited to approved reads, Pip memory writes, draft-folder outputs, local dashboard rendering, and append-only receipts.
+
+Prompt-injection preflight can block obvious attempts to override instructions, reveal hidden prompts, or bypass approval. It is intentionally conservative and pattern-based; reviewers should still inspect any route that passes untrusted text into tools.
+
+Tool-memory rules store durable per-tool boundaries, such as "never send messages without explicit approval." These rules should reinforce the permission queue, not replace it.
+
+The Gmail bridge is draft-only. It accepts manual summaries pasted by the user and writes organization proposals under Pip memory. It does not use OAuth, Gmail APIs, browser automation, contact access, sending, deleting, archiving, labeling, or marking messages read.
+
+The future Gmail connector contract is read-only first. Write-capable scopes such as send, compose, modify, label, archive, delete, or contact/calendar write access require a new review milestone and explicit approval.
+
+The GitHub repo watcher reads public repository metadata only and writes draft suggestions under Pip memory. It should not clone repos, install dependencies, open PRs, or modify Pip code without the normal review path.
+
+Weekly Update is separate from Nightwatch. Nightwatch is local memory/efficiency maintenance; Weekly Update is an opt-in industry-watch loop that prefers proven concepts, drafts suggestions, and requires audit before implementation.
 
 ## Local Network Dashboard
 
@@ -52,6 +66,9 @@ Avoid committing:
 - `imports/phone_upload_*.json`
 - `pip_traces.jsonl`
 - `pip_task_runs.jsonl`
+- `tool_memory_rules.json` if it contains personal app/tool constraints
+- `gmail_drafts/` and any pasted email summaries
+- `repo_watch/` runtime reports
 - screenshots, dashboard dumps, and local review logs
 
 ## Review Focus

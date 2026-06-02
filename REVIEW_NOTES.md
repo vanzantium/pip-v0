@@ -18,6 +18,12 @@ The fair framing is: Pip can inspect, condense, propose, queue, and learn from l
 ## Recently Added
 
 - `pip_traces.py` adds an append-only trace spine for skill runs, Flow Master checks, dashboard actions, and future handoffs.
+- `pip_prompt_guard.py` adds an OpenHuman-inspired prompt-injection preflight guard before Token Governor admission.
+- `pip_tool_memory.py` adds OpenHuman-inspired tool-scoped durable rules for app/tool safety boundaries.
+- `pip_gmail_bridge.py` adds a draft-only Gmail organization bridge for pasted/manual inbox summaries.
+- `GMAIL_CONNECTOR_ROADMAP.md` defines the future Gmail read-only connector boundary before any write-capable email action.
+- `pip_repo_watch.py` adds a public GitHub repo watcher that drafts weekly update suggestions without changing code.
+- `pip_weekly_update.py` makes the repo watcher a separate opt-in Weekly Update system, independent from Nightwatch.
 - `pip_task_runs.py` adds append-only receipts for scheduler events, Nightwatch launches, and background script runs.
 - `pip_system_manifest.py` gives Pip a compact self-map of roots, primitives, safety contract, and control surfaces.
 - `pip_skill_registry.py` adds portable local skill packages from `skills/`.

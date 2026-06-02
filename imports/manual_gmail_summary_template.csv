@@ -1,0 +1,4 @@
+from,subject,snippet,received_at,unread,has_attachment,labels
+calendar@example.com,Project check-in tomorrow,Reminder for tomorrow's project check-in,2026-06-02,true,false,
+billing@example.com,Invoice available,Your monthly invoice is ready to review,2026-06-01,true,true,
+newsletter@example.com,Weekly design digest,A weekly roundup of design links,2026-05-31,false,false,Newsletter

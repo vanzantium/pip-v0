@@ -16,6 +16,12 @@ from pip_phone_bridge import (
     import_phone_usage_file as import_phone_usage_file_impl,
     run_phone_optimizer as run_phone_optimizer_impl,
 )
+from pip_gmail_bridge import (
+    apply_gmail_feedback as apply_gmail_feedback_impl,
+    get_gmail_status as get_gmail_status_impl,
+    import_gmail_summary_file as import_gmail_summary_file_impl,
+    inspect_connector_contract as inspect_gmail_connector_contract_impl,
+)
 from pip_workspace import (
     classify_action_permission as classify_action_permission_impl,
     condense_workspace as condense_workspace_impl,
@@ -220,6 +226,95 @@ def apply_phone_feedback(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
+def import_gmail_summary(args: argparse.Namespace) -> dict[str, Any]:
+    status = import_gmail_summary_file_impl(args.input)
+    return {
+        "skill": "import_gmail_summary",
+        "status": status,
+    }
+
+
+def inspect_gmail_status(args: argparse.Namespace) -> dict[str, Any]:
+    return {
+        "skill": "inspect_gmail_status",
+        "status": get_gmail_status_impl(),
+    }
+
+
+def apply_gmail_feedback(args: argparse.Namespace) -> dict[str, Any]:
+    status = apply_gmail_feedback_impl(args.feedback or "deferred", args.note or "")
+    return {
+        "skill": "apply_gmail_feedback",
+        "status": status,
+    }
+
+
+def inspect_gmail_connector_plan(args: argparse.Namespace) -> dict[str, Any]:
+    return {
+        "skill": "inspect_gmail_connector_plan",
+        "status": inspect_gmail_connector_contract_impl(),
+    }
+
+
+def scan_repo_watch(args: argparse.Namespace) -> dict[str, Any]:
+    import pip_repo_watch
+    return {
+        "skill": "scan_repo_watch",
+        "status": pip_repo_watch.scan_repo_watch(
+            config_path=args.config or "repo_watch_config.json",
+            force=bool(args.force),
+        ),
+    }
+
+
+def inspect_repo_watch(args: argparse.Namespace) -> dict[str, Any]:
+    import pip_repo_watch
+    return {
+        "skill": "inspect_repo_watch",
+        "status": pip_repo_watch.get_repo_watch_status(),
+    }
+
+
+def queue_weekly_repo_watch(args: argparse.Namespace) -> dict[str, Any]:
+    import pip_repo_watch
+    return {
+        "skill": "queue_weekly_repo_watch",
+        "status": pip_repo_watch.queue_weekly_repo_watch(),
+    }
+
+
+def inspect_weekly_update(args: argparse.Namespace) -> dict[str, Any]:
+    import pip_weekly_update
+    return {
+        "skill": "inspect_weekly_update",
+        "status": pip_weekly_update.inspect_weekly_update(),
+    }
+
+
+def enable_weekly_update(args: argparse.Namespace) -> dict[str, Any]:
+    import pip_weekly_update
+    return {
+        "skill": "enable_weekly_update",
+        "status": pip_weekly_update.enable_weekly_update(queue_scheduler=True),
+    }
+
+
+def disable_weekly_update(args: argparse.Namespace) -> dict[str, Any]:
+    import pip_weekly_update
+    return {
+        "skill": "disable_weekly_update",
+        "status": pip_weekly_update.disable_weekly_update(),
+    }
+
+
+def run_weekly_update(args: argparse.Namespace) -> dict[str, Any]:
+    import pip_weekly_update
+    return {
+        "skill": "run_weekly_update",
+        "status": pip_weekly_update.run_weekly_update(force=bool(args.force)),
+    }
+
+
 def list_jobs(args: argparse.Namespace) -> dict[str, Any]:
     import pip_jobs
     return {
@@ -359,6 +454,46 @@ def govern_interaction(args: argparse.Namespace) -> dict[str, Any]:
             source_type=args.source_type or "first_hand",
             source_name=args.source_name or "Pip CLI interaction",
         ),
+    }
+
+
+def check_prompt_guard(args: argparse.Namespace) -> dict[str, Any]:
+    import pip_prompt_guard
+    text = args.content or args.query or ""
+    guard = pip_prompt_guard.check_prompt_guard(text)
+    return {
+        "skill": "check_prompt_guard",
+        "prompt_guard": guard,
+        "nudge": pip_prompt_guard.nudge_for(guard.get("verdict", "allow")),
+    }
+
+
+def put_tool_rule(args: argparse.Namespace) -> dict[str, Any]:
+    import pip_tool_memory
+    tags = []
+    if args.tag:
+        tags = [tag.strip() for tag in args.tag.split(",") if tag.strip()]
+    return {
+        "skill": "put_tool_rule",
+        "result": pip_tool_memory.put_rule(
+            args.tool_name or args.app or "general",
+            args.rule or args.content or "",
+            priority=args.priority or "normal",
+            source=args.source_name or "user_explicit",
+            tags=tags,
+        ),
+    }
+
+
+def inspect_tool_rules(args: argparse.Namespace) -> dict[str, Any]:
+    import pip_tool_memory
+    return {
+        "skill": "inspect_tool_rules",
+        "status": pip_tool_memory.inspect_tool_rules(
+            tool_name=args.tool_name,
+            limit=args.limit,
+        ),
+        "prompt_boundary": pip_tool_memory.rules_for_prompt(args.tool_name),
     }
 
 
@@ -977,12 +1112,42 @@ SKILLS: dict[str, tuple[SkillSpec, Callable[[argparse.Namespace], dict[str, Any]
     "govern_interaction": (
         SkillSpec(
             name="govern_interaction",
-            description="Assess a user/Pip interaction through Signal Sieve and the local token governor before spending effort.",
+            description="Assess a user/Pip interaction through Prompt Guard, Signal Sieve, and the local token governor before spending effort.",
             inputs=["--content text", "--intent chat|autonomous_goal|blender_recipe"],
-            outputs=["admission decision, mode, priority, budget, nudge"],
+            outputs=["admission decision, prompt guard verdict, mode, priority, budget, nudge"],
             permissions=["read/write memory folder", "read local signal-sieve code"],
         ),
         govern_interaction,
+    ),
+    "check_prompt_guard": (
+        SkillSpec(
+            name="check_prompt_guard",
+            description="Run Pip's prompt-injection preflight guard over text before admitting it into chat or tool work.",
+            inputs=["--content text"],
+            outputs=["allow|review|block verdict with reasons"],
+            permissions=["none"],
+        ),
+        check_prompt_guard,
+    ),
+    "put_tool_rule": (
+        SkillSpec(
+            name="put_tool_rule",
+            description="Store or update a durable tool-scoped memory rule, such as approval boundaries for a tool or app.",
+            inputs=["--tool-name send_message", "--rule text", "--priority critical|high|normal|low", "--tag safety"],
+            outputs=["memory/tool_memory_rules.json"],
+            permissions=["write memory folder"],
+        ),
+        put_tool_rule,
+    ),
+    "inspect_tool_rules": (
+        SkillSpec(
+            name="inspect_tool_rules",
+            description="Inspect Pip's tool-scoped memory rules and render a compact prompt boundary for critical/high rules.",
+            inputs=["--tool-name optional", "--limit 20"],
+            outputs=["tool rules summary and prompt boundary"],
+            permissions=["read memory folder"],
+        ),
+        inspect_tool_rules,
     ),
     "record_token_event": (
         SkillSpec(
@@ -1177,6 +1342,116 @@ SKILLS: dict[str, tuple[SkillSpec, Callable[[argparse.Namespace], dict[str, Any]
         ),
         apply_phone_feedback,
     ),
+    "import_gmail_summary": (
+        SkillSpec(
+            name="import_gmail_summary",
+            description="Import a manual Gmail inbox summary and draft labels, priorities, replies, and follow-ups without connecting to Gmail.",
+            inputs=["--input manual_gmail_summary_template.csv"],
+            outputs=["gmail_drafts/latest_inbox_summary.json, latest_organization_draft.json, gmail_bridge_status.json under Pip memory"],
+            permissions=["read input file", "write memory folder"],
+        ),
+        import_gmail_summary,
+    ),
+    "inspect_gmail_status": (
+        SkillSpec(
+            name="inspect_gmail_status",
+            description="Inspect the latest draft-only Gmail organization pass.",
+            inputs=[],
+            outputs=["gmail draft status JSON"],
+            permissions=["read memory folder"],
+        ),
+        inspect_gmail_status,
+    ),
+    "apply_gmail_feedback": (
+        SkillSpec(
+            name="apply_gmail_feedback",
+            description="Record feedback on Pip's Gmail organization draft without taking Gmail actions.",
+            inputs=["--feedback accepted|rejected|deferred|resolved", "--note optional"],
+            outputs=["updated gmail_drafts/latest_organization_draft.json and gmail_bridge_status.json"],
+            permissions=["read/write memory folder"],
+        ),
+        apply_gmail_feedback,
+    ),
+    "inspect_gmail_connector_plan": (
+        SkillSpec(
+            name="inspect_gmail_connector_plan",
+            description="Inspect the future Gmail read-only connector contract and blocked write actions.",
+            inputs=[],
+            outputs=["Gmail connector contract JSON"],
+            permissions=["none"],
+        ),
+        inspect_gmail_connector_plan,
+    ),
+    "scan_repo_watch": (
+        SkillSpec(
+            name="scan_repo_watch",
+            description="Scan configured public GitHub repos and draft update suggestions for Pip without changing code.",
+            inputs=["--config repo_watch_config.json", "--force"],
+            outputs=["repo_watch/latest_repo_watch.json under Pip memory"],
+            permissions=["read public GitHub API", "write memory folder"],
+        ),
+        scan_repo_watch,
+    ),
+    "inspect_repo_watch": (
+        SkillSpec(
+            name="inspect_repo_watch",
+            description="Inspect the latest draft-only GitHub repo watch report.",
+            inputs=[],
+            outputs=["repo watch status JSON"],
+            permissions=["read memory folder"],
+        ),
+        inspect_repo_watch,
+    ),
+    "queue_weekly_repo_watch": (
+        SkillSpec(
+            name="queue_weekly_repo_watch",
+            description="Queue a supervised weekly repo-watch job in Pip's scheduler.",
+            inputs=[],
+            outputs=["scheduler job receipt"],
+            permissions=["write memory folder"],
+        ),
+        queue_weekly_repo_watch,
+    ),
+    "inspect_weekly_update": (
+        SkillSpec(
+            name="inspect_weekly_update",
+            description="Inspect Pip's opt-in Weekly Update system and audit policy.",
+            inputs=[],
+            outputs=["weekly update status and policy JSON"],
+            permissions=["read memory folder"],
+        ),
+        inspect_weekly_update,
+    ),
+    "enable_weekly_update": (
+        SkillSpec(
+            name="enable_weekly_update",
+            description="Enable Pip's separate Weekly Update watch and queue a supervised weekly scheduler job.",
+            inputs=[],
+            outputs=["weekly update status and scheduler job"],
+            permissions=["write memory folder"],
+        ),
+        enable_weekly_update,
+    ),
+    "disable_weekly_update": (
+        SkillSpec(
+            name="disable_weekly_update",
+            description="Disable Pip's Weekly Update watch without affecting Nightwatch.",
+            inputs=[],
+            outputs=["weekly update status"],
+            permissions=["write memory folder"],
+        ),
+        disable_weekly_update,
+    ),
+    "run_weekly_update": (
+        SkillSpec(
+            name="run_weekly_update",
+            description="Run a manual Weekly Update scan and draft audited improvement suggestions.",
+            inputs=["--force"],
+            outputs=["weekly update status and repo-watch report"],
+            permissions=["read public GitHub API", "write memory folder"],
+        ),
+        run_weekly_update,
+    ),
     "scan_workspace": (
         SkillSpec(
             name="scan_workspace",
@@ -1285,6 +1560,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser = subparsers.add_parser("run", help="Run one skill")
     run_parser.add_argument("skill", choices=sorted(SKILLS))
     run_parser.add_argument("--input", help="Input usage or Android export JSON")
+    run_parser.add_argument("--config", help="Optional config path")
     run_parser.add_argument("--memory", default="memory.json", help="Pip memory JSON path")
     run_parser.add_argument("--feedback", choices=["accepted", "rejected", "deferred", "resolved"])
     run_parser.add_argument("--output", help="Output JSON path")
@@ -1328,10 +1604,15 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--intent", help="Token Governor interaction intent")
     run_parser.add_argument("--source-type", help="Signal Sieve source type hint")
     run_parser.add_argument("--source-name", help="Signal Sieve source name hint")
+    run_parser.add_argument("--tool-name", help="Tool/app/skill name for tool-scoped memory rules")
+    run_parser.add_argument("--rule", help="Tool memory rule text")
+    run_parser.add_argument("--priority", choices=["critical", "high", "normal", "low"], help="Tool memory rule priority")
+    run_parser.add_argument("--tag", help="Comma-separated tool memory rule tags")
     run_parser.add_argument("--estimated-tokens", type=int, help="Estimated tokens for record_token_event")
     run_parser.add_argument("--actual-tokens", type=int, help="Actual tokens for record_token_event")
     run_parser.add_argument("--saved-tokens", type=int, help="Saved/avoided tokens for record_token_event")
     run_parser.add_argument("--scenarios", default="scenarios", help="Scenario directory for run_eval")
+    run_parser.add_argument("--force", action="store_true", help="Force a scan even if a cadence window is active")
 
     return parser
 
@@ -1356,6 +1637,7 @@ def main() -> None:
         "validate_android_usage",
         "import_phone_usage",
         "import_phone_summary",
+        "import_gmail_summary",
     } and not args.input:
         missing.append("--input")
     if args.skill in {"run_weekly_dream", "export_proposal_card", "import_android_usage"} and not args.output:
@@ -1366,6 +1648,8 @@ def main() -> None:
         missing.append("--request-id")
     if args.skill == "resolve_permission" and not args.decision:
         missing.append("--decision")
+    if args.skill == "put_tool_rule" and not (args.rule or args.content):
+        missing.append("--rule")
     if missing:
         parser.error(f"{args.skill} requires: {', '.join(missing)}")
 

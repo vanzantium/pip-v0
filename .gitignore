@@ -12,6 +12,8 @@ imports/pc_usage_*.json
 imports/phone_upload_*.json
 imports/s25_*.json
 imports/phone_bridge_status.json
+imports/gmail_*.json
+imports/gmail_*.csv
 
 # Runtime configuration containing personal paths
 config.json
@@ -41,6 +43,8 @@ pip_task_runs.jsonl
 pip_system_manifest.json
 pip_scheduler.json
 pip_persona_memory.json
+gmail_drafts/
+repo_watch/
 self_model.json
 finetune_curator.jsonl
 

@@ -9,6 +9,7 @@ from typing import Any
 
 import pip_config
 import pip_platform
+import pip_prompt_guard
 
 
 ROOT = Path(__file__).resolve().parent
@@ -157,6 +158,13 @@ def _nudge_for(mode: str, action: str, intent: str, estimated: int) -> str:
     return "Budget looks healthy. Proceed normally, but keep outputs purposeful."
 
 
+def _prompt_guard_nudge(prompt_guard: dict[str, Any]) -> str:
+    verdict = prompt_guard.get("verdict", "allow")
+    if verdict in {"block", "review"}:
+        return pip_prompt_guard.nudge_for(verdict)
+    return ""
+
+
 def assess_interaction(
     text: str,
     intent: str = "chat",
@@ -164,9 +172,16 @@ def assess_interaction(
     source_name: str = "Pip user interaction",
 ) -> dict[str, Any]:
     state = load_state()
+    prompt_guard = pip_prompt_guard.check_prompt_guard(text)
     sieve = analyze_signal(text, source_type=source_type, source_name=source_name)
     action = sieve.get("recommended_action", "treat_as_lead")
     mapping = ACTION_MAPPING.get(action, ACTION_MAPPING["treat_as_background"])
+    if prompt_guard["verdict"] == "block":
+        action = "reject"
+        mapping = ACTION_MAPPING["reject"]
+    elif prompt_guard["verdict"] == "review" and mapping["priority"] in {"BACKGROUND", "SPECULATIVE"}:
+        action = "seek_receipts"
+        mapping = ACTION_MAPPING["seek_receipts"]
     multiplier = INTENT_MULTIPLIERS.get(intent, 1.0)
     estimated = int(estimate_tokens(text, mapping["max_output_tokens"]) * multiplier)
     daily_budget = max(1, int(state.get("daily_budget_tokens", DEFAULT_STATE["daily_budget_tokens"])))
@@ -179,7 +194,10 @@ def assess_interaction(
 
     allowed = True
     reason = "admitted"
-    if action == "reject":
+    if prompt_guard["verdict"] == "block":
+        allowed = False
+        reason = "prompt_guard_block"
+    elif action == "reject":
         allowed = False
         reason = "signal_sieve_reject"
     elif mode == "SHED" and mapping["priority"] not in {"CRITICAL"}:
@@ -204,7 +222,8 @@ def assess_interaction(
         "daily_used_tokens": state.get("daily_used_tokens", 0),
         "remaining_ratio_after": round(remaining_ratio, 3),
         "pressure": round(combined_pressure, 3),
-        "nudge": _nudge_for(mode, action, intent, estimated),
+        "nudge": _prompt_guard_nudge(prompt_guard) or _nudge_for(mode, action, intent, estimated),
+        "prompt_guard": prompt_guard,
         "signal": {
             "triage_summary": sieve.get("triage_summary", ""),
             "scores": sieve.get("scores", {}),

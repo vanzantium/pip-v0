@@ -18,6 +18,7 @@ from pip_phone_bridge import (
     import_manual_summary_text,
     import_phone_usage_text,
 )
+from pip_gmail_bridge import apply_gmail_feedback, get_gmail_status, import_gmail_summary_text
 from pip_pc_bridge import get_pc_status, import_pc_usage_text
 from pip_workspace import (
     draft_next_actions,
@@ -35,9 +36,12 @@ import pip_flow_master
 import pip_jobs
 import pip_scheduler
 import pip_platform
+import pip_repo_watch
 import pip_system_manifest
 import pip_token_guard
+import pip_tool_memory
 import pip_traces
+import pip_weekly_update
 import pip_background_tasks
 import pip_task_runs
 
@@ -291,6 +295,10 @@ def page(status: dict[str, Any]) -> str:
     gov_last = governor.get("last_assessment") or {}
     gov_nudge = html.escape(gov_last.get("nudge") or "Pip is watching the budget and will nudge when work gets wasteful.")
     gov_signal = html.escape((gov_last.get("signal") or {}).get("triage_summary", "No recent Signal Sieve assessment."))
+    guard = gov_last.get("prompt_guard") or {}
+    guard_verdict = html.escape((guard.get("verdict") or "none").upper())
+    guard_score = guard.get("score")
+    guard_score_text = "not checked" if guard_score is None else f"{int(float(guard_score) * 100)}%"
     gov_events = ""
     for event in governor.get("recent_events", [])[-5:]:
         gov_events += f"""
@@ -301,6 +309,57 @@ def page(status: dict[str, Any]) -> str:
         """
     if not gov_events:
         gov_events = "<p class='small'>No token events recorded yet.</p>"
+
+    tool_rules = pip_tool_memory.inspect_tool_rules(limit=8)
+    tool_rules_html = ""
+    for rule in tool_rules.get("rules", []):
+        tool_rules_html += f"""
+        <div class="small" style="margin-bottom:10px;padding:10px;background:rgba(255,255,255,.06);border-radius:10px;">
+          <strong>{html.escape(rule.get('tool_name', 'general'))}</strong>
+          <span class="pill" style="padding:2px 8px;font-size:.72rem;">{html.escape(rule.get('priority', 'normal'))}</span>
+          <p class="small" style="margin:4px 0 0 0;">{html.escape(rule.get('rule', ''))}</p>
+        </div>
+        """
+    if not tool_rules_html:
+        tool_rules_html = "<p class='small'>No tool rules stored yet. Add rules from the CLI when Pip learns a tool boundary.</p>"
+
+    gmail_status = get_gmail_status()
+    gmail_proposal = gmail_status.get("proposal") or {}
+    gmail_card = gmail_proposal.get("proposal_card") or {}
+    gmail_summary = gmail_proposal.get("summary") or {}
+    gmail_status_label = html.escape(gmail_card.get("status", "idle"))
+    gmail_proposal_text = html.escape(gmail_card.get("proposal", "Paste a manual Gmail summary to draft an organization pass."))
+    gmail_evidence = html.escape(gmail_card.get("evidence", "No Gmail summary imported yet."))
+    gmail_counts = html.escape(
+        f"high {gmail_summary.get('high_priority', 0)} | medium {gmail_summary.get('medium_priority', 0)} | low {gmail_summary.get('low_priority', 0)}"
+    )
+    gmail_items_html = ""
+    for item in (gmail_proposal.get("proposals") or [])[:6]:
+        labels = ", ".join(item.get("suggested_labels", []))
+        gmail_items_html += f"""
+        <div style="margin-bottom:10px;padding:10px;background:rgba(255,255,255,.06);border-radius:10px;">
+          <p class="small" style="margin:0 0 4px 0;"><strong>{html.escape(item.get('subject', '(no subject)'))}</strong></p>
+          <p class="small" style="margin:0 0 4px 0;">{html.escape(item.get('from', 'unknown sender'))} | {html.escape(item.get('priority', 'low'))} | {html.escape(labels)}</p>
+          <p class="small" style="margin:0;">{html.escape(item.get('suggested_action', 'Review.'))}</p>
+        </div>
+        """
+    if not gmail_items_html:
+        gmail_items_html = "<p class='small'>No Gmail draft items yet.</p>"
+
+    repo_watch = pip_repo_watch.get_repo_watch_status()
+    weekly_update = pip_weekly_update.inspect_weekly_update()
+    repo_report = repo_watch.get("proposal") or {}
+    repo_card = repo_report.get("proposal_card") or {}
+    weekly_enabled = "enabled" if weekly_update.get("enabled") else "disabled"
+    repo_status_label = html.escape(f"{weekly_enabled} / {repo_card.get('status', 'idle')}")
+    repo_proposal_text = html.escape(repo_card.get("proposal", "Run Weekly Update to scan public agent repos for Pip update ideas."))
+    repo_evidence = html.escape(repo_card.get("evidence", "No repo watch report yet."))
+    repo_last_scan = html.escape(weekly_update.get("last_run_at") or repo_watch.get("last_scan_at") or "not scanned yet")
+    repo_actions_html = ""
+    for action in (repo_report.get("next_actions") or [])[:6]:
+        repo_actions_html += f"<li>{html.escape(action)}</li>"
+    if not repo_actions_html:
+        repo_actions_html = "<li>No repo watch suggestions yet.</li>"
 
     flow = pip_flow_master.inspect_flow_master()
     flow_latest = flow.get("latest_assessment") or {}
@@ -1041,6 +1100,8 @@ class PipHandler(BaseHTTPRequestHandler):
                 self.send_json(pip_token_guard.status())
             elif parsed.path == "/flow-master":
                 self.send_json(pip_flow_master.inspect_flow_master())
+            elif parsed.path == "/repo-watch":
+                self.send_json(pip_weekly_update.inspect_weekly_update())
             elif parsed.path == "/traces":
                 self.send_json(pip_traces.inspect_traces(limit=50))
             elif parsed.path == "/system-manifest":
@@ -1049,6 +1110,8 @@ class PipHandler(BaseHTTPRequestHandler):
                 self.send_json(pip_platform.feature_status())
             elif parsed.path == "/phone/status":
                 self.send_json(get_phone_status())
+            elif parsed.path == "/gmail/status":
+                self.send_json(get_gmail_status())
             elif parsed.path == "/pc/status":
                 self.send_json(get_pc_status())
             elif parsed.path == "/default-fairy":
@@ -1088,6 +1151,9 @@ class PipHandler(BaseHTTPRequestHandler):
                 pc = get_pc_status()
                 pc_proposal = pc.get("proposal") or {}
                 pc_card = pc_proposal.get("proposal_card") or pc_proposal
+                gmail = get_gmail_status()
+                gmail_proposal = gmail.get("proposal") or {}
+                gmail_card = gmail_proposal.get("proposal_card") or gmail_proposal
                 # Prefer workspace proposal if it has text; fall back to phone
                 if wp.get("proposal"):
                     self.send_json(wp)
@@ -1095,6 +1161,8 @@ class PipHandler(BaseHTTPRequestHandler):
                     self.send_json(phone_card)
                 elif pc_card.get("proposal"):
                     self.send_json(pc_card)
+                elif gmail_card.get("proposal"):
+                    self.send_json(gmail_card)
                 else:
                     self.send_json({})
             elif parsed.path == "/fairy":
@@ -1299,6 +1367,33 @@ class PipHandler(BaseHTTPRequestHandler):
                         details={"flow_state": assessment.get("flow_state"), "pressure": assessment.get("composite_threat_score")},
                     )
                 self.redirect_home()
+            elif parsed.path == "/repo-watch/scan":
+                result = pip_weekly_update.run_weekly_update(force=True)
+                self.trace_dashboard_action(
+                    "weekly_update_scan",
+                    "Dashboard ran Weekly Update repo watch for draft suggestions.",
+                    status="ok",
+                    details={"latest_repo_watch": result.get("latest_repo_watch")},
+                )
+                self.redirect_home()
+            elif parsed.path == "/repo-watch/schedule":
+                result = pip_weekly_update.enable_weekly_update(queue_scheduler=True)
+                self.trace_dashboard_action(
+                    "weekly_update_enable",
+                    "Dashboard enabled Weekly Update watch.",
+                    status="enabled" if result.get("enabled") else "failed",
+                    details=result,
+                )
+                self.redirect_home()
+            elif parsed.path == "/repo-watch/disable":
+                result = pip_weekly_update.disable_weekly_update()
+                self.trace_dashboard_action(
+                    "weekly_update_disable",
+                    "Dashboard disabled Weekly Update watch.",
+                    status="disabled",
+                    details=result,
+                )
+                self.redirect_home()
             elif parsed.path == "/system-manifest/refresh":
                 pip_system_manifest.save_manifest()
                 self.trace_dashboard_action("system_manifest_refresh", "Dashboard refreshed Pip's system map.")
@@ -1484,6 +1579,19 @@ if ($f.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                 note = (form.get("note") or [""])[0]
                 apply_phone_feedback(feedback, note)
                 self.trace_dashboard_action("phone_feedback", "Dashboard recorded phone proposal feedback.", status=feedback or "ok")
+                self.redirect_home()
+            elif parsed.path == "/gmail/summary-import":
+                form = self.read_body()
+                summary_csv = (form.get("gmail_summary") or [""])[0]
+                import_gmail_summary_text(summary_csv, "dashboard_gmail_summary.csv")
+                self.trace_dashboard_action("gmail_summary_import", "Dashboard imported a draft-only Gmail summary.")
+                self.redirect_home()
+            elif parsed.path == "/gmail/feedback":
+                form = self.read_body()
+                feedback = (form.get("feedback") or [""])[0]
+                note = (form.get("note") or [""])[0]
+                apply_gmail_feedback(feedback, note)
+                self.trace_dashboard_action("gmail_feedback", "Dashboard recorded Gmail draft feedback.", status=feedback or "ok")
                 self.redirect_home()
             elif parsed.path == "/chat":
                 form = self.read_body()

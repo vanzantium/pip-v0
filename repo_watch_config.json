@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "cadence_days": 7,
+  "repos": [
+    {
+      "name": "OpenHuman",
+      "full_name": "tinyhumansai/openhuman",
+      "why_watch": "Memory tools, tool policy, TokenJuice compression, prompt guard, and integration patterns."
+    },
+    {
+      "name": "OpenJarvis",
+      "full_name": "open-jarvis/OpenJarvis",
+      "why_watch": "System-map, assistant architecture, and local agent organization patterns."
+    },
+    {
+      "name": "Odysseus",
+      "full_name": "pewdiepie-archdaemon/odysseus",
+      "why_watch": "Operational hardening, local agent structure, and safety ideas."
+    },
+    {
+      "name": "jcode",
+      "full_name": "1jehuang/jcode",
+      "why_watch": "Coding-agent tooling and developer workflow patterns."
+    },
+    {
+      "name": "space-agent",
+      "full_name": "agent0ai/space-agent",
+      "why_watch": "Agent workspace, tool-use, and UI/control-loop patterns."
+    }
+  ]
+}
