@@ -11,6 +11,7 @@ from pathlib import Path
 
 
 REQUIRED_FILES = [
+    "AGENTS.md",
     "pip_engine.py",
     "generate_synthetic_usage.py",
     "run_demo.py",
@@ -21,6 +22,7 @@ REQUIRED_FILES = [
     "pip_gmail_bridge.py",
     "pip_repo_watch.py",
     "pip_weekly_update.py",
+    "pip_dox.py",
     "pip_workspace.py",
     "pip_control_panel.py",
     "pip_safety.py",
@@ -51,6 +53,10 @@ REQUIRED_FILES = [
     "pip_fairy_window.py",
     "approved_workspaces.json",
     "repo_watch_config.json",
+    "dashboard_ui/AGENTS.md",
+    "imports/AGENTS.md",
+    "scenarios/AGENTS.md",
+    "skills/AGENTS.md",
     "imports/manual_gmail_summary_template.csv",
     "README.md",
     "S25_ROADMAP.md",
@@ -60,6 +66,7 @@ REQUIRED_FILES = [
     "OPENJARVIS_COMPARISON.md",
     "ODYSSEUS_COMPARISON.md",
     "OPENHUMAN_COMPARISON.md",
+    "DOX_COMPARISON.md",
     "GMAIL_CONNECTOR_ROADMAP.md",
     "SECURITY.md",
 ]
@@ -219,6 +226,7 @@ def main() -> None:
             "enable_weekly_update",
             "disable_weekly_update",
             "run_weekly_update",
+            "inspect_dox",
         ]:
             if skill_name not in pip_skills.SKILLS:
                 failures.append(f"{skill_name} handler should be registered in SKILLS")
@@ -301,7 +309,19 @@ def main() -> None:
                 failures.append("task-run inspection should use bounded reads")
             manifest = pip_system_manifest.save_manifest()
             primitives = manifest.get("primitives", {})
-            for primitive in ["skills", "workspace_loop", "control_panel", "trace_spine", "task_runs", "governors", "tool_memory", "gmail_bridge", "repo_watch", "weekly_update"]:
+            for primitive in [
+                "skills",
+                "workspace_loop",
+                "control_panel",
+                "trace_spine",
+                "task_runs",
+                "governors",
+                "tool_memory",
+                "gmail_bridge",
+                "repo_watch",
+                "weekly_update",
+                "dox_context_tree",
+            ]:
                 if primitive not in primitives:
                     failures.append(f"system manifest missing primitive: {primitive}")
             if not (temp_root / "pip_system_manifest.json").exists():
@@ -434,6 +454,25 @@ def main() -> None:
             pip_config.get_memory_path = original_memory_path
         except Exception:
             pass
+
+    try:
+        import pip_dox
+
+        dox = pip_dox.inspect_dox(root)
+        if not dox.get("ok"):
+            failures.extend(f"DOX: {error}" for error in dox.get("errors", []))
+        expected_dox_docs = {
+            "AGENTS.md",
+            "dashboard_ui/AGENTS.md",
+            "imports/AGENTS.md",
+            "scenarios/AGENTS.md",
+            "skills/AGENTS.md",
+        }
+        missing_dox_docs = expected_dox_docs.difference(dox.get("documents", []))
+        if missing_dox_docs:
+            failures.append(f"DOX tree missing documents: {sorted(missing_dox_docs)}")
+    except Exception as exc:
+        failures.append(f"DOX context-tree consistency check failed: {exc}")
 
     if failures:
         print("Pip doctor found issues:")

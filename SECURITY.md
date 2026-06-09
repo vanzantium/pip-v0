@@ -37,6 +37,8 @@ The GitHub repo watcher reads public repository metadata only and writes draft s
 
 Weekly Update is separate from Nightwatch. Nightwatch is local memory/efficiency maintenance; Weekly Update is an opt-in industry-watch loop that prefers proven concepts, drafts suggestions, and requires audit before implementation.
 
+DOX `AGENTS.md` files guide coding agents but do not grant runtime permissions. A child document may specialize local work but must not weaken Pip's root approval, privacy, path, or execution boundaries.
+
 ## Local Network Dashboard
 
 The dashboard is designed for the user's laptop and phone on the same Wi-Fi. It does not currently provide production-grade authentication, rate limiting, or transport encryption.

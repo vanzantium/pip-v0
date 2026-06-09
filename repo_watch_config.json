@@ -26,6 +26,11 @@
       "name": "space-agent",
       "full_name": "agent0ai/space-agent",
       "why_watch": "Agent workspace, tool-use, and UI/control-loop patterns."
+    },
+    {
+      "name": "DOX",
+      "full_name": "agent0ai/dox",
+      "why_watch": "Hierarchical AGENTS.md context contracts and documentation-drift control for coding agents."
     }
   ]
 }

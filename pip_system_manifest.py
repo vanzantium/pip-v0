@@ -90,6 +90,17 @@ def build_manifest() -> dict[str, Any]:
                 "description": "Manifest-listed skill bundles from skills/ with lazy trusted-package loading.",
                 "files": [_file_state("pip_skill_registry.py"), _file_state("skills")],
             },
+            "dox_context_tree": {
+                "description": "Builder-facing hierarchical AGENTS.md contracts for project-wide and path-local coding guidance.",
+                "files": [
+                    _file_state("AGENTS.md"),
+                    _file_state("pip_dox.py"),
+                    _file_state("dashboard_ui/AGENTS.md"),
+                    _file_state("imports/AGENTS.md"),
+                    _file_state("scenarios/AGENTS.md"),
+                    _file_state("skills/AGENTS.md"),
+                ],
+            },
             "workspace_loop": {
                 "description": "Approved-folder scanner, condenser, proposal writer, ambient cycle, and permission queue.",
                 "files": [_file_state("pip_workspace.py"), _file_state("approved_workspaces.json")],
@@ -179,6 +190,12 @@ def build_manifest() -> dict[str, Any]:
             "Add a prompt-injection preflight guard before admitting chat/tool work.",
             "Store tool-scoped durable rules under Pip memory instead of scattering boundaries across prompts.",
             "Defer hosted OAuth integrations and broad external tools until policy boundaries are stronger.",
+        ],
+        "dox_takeaways_applied": [
+            "Give coding agents a root-to-local context chain before edits.",
+            "Keep path-specific contracts close to durable project boundaries.",
+            "Validate child indexes and required sections through Pip doctor.",
+            "Use DOX as builder guidance without granting runtime permissions.",
         ],
     }
 

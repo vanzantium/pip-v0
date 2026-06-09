@@ -22,6 +22,7 @@ This prototype focuses on the real moat:
 - `pip_gmail_bridge.py` - draft-only manual Gmail summary import and organization proposals
 - `pip_repo_watch.py` - public GitHub repo watcher for draft-only weekly update suggestions
 - `pip_weekly_update.py` - opt-in industry-watch wrapper that keeps Weekly Update separate from Nightwatch
+- `pip_dox.py` - validates Pip's hierarchical `AGENTS.md` builder-context tree
 - `pip_workspace.py` - approved-folder work loop for draft-only project scanning
 - `pip_control_panel.py` - local web dashboard for phone approval/control
 - `pip_flow_master.py` - safe Flow Master doctrine and pressure-assessment add-on
@@ -38,6 +39,7 @@ This prototype focuses on the real moat:
 - `OPENJARVIS_COMPARISON.md` - notes on what to borrow from OpenJarvis without over-expanding Pip
 - `ODYSSEUS_COMPARISON.md` - notes on Odysseus-inspired hardening without over-expanding Pip
 - `OPENHUMAN_COMPARISON.md` - notes on OpenHuman-inspired prompt guard and tool-memory patterns
+- `DOX_COMPARISON.md` - notes on DOX-inspired path-scoped coding-agent context
 - `GMAIL_CONNECTOR_ROADMAP.md` - read-only Gmail connector contract and future write-action boundary
 - `DEPLOYMENT_OPTIONS.md` - local S25 versus laptop/chat deployment options
 - `ANDROID_TELEMETRY_SCHEMA.md` - JSON bridge contract between S25 exports and Pip
@@ -87,6 +89,7 @@ Run project health checks:
 
 ```powershell
 python pip_doctor.py
+python pip_skills.py run inspect_dox
 ```
 
 List and run local skills:
@@ -340,6 +343,7 @@ Included:
 - compact system manifest so Pip can describe her own roots, primitives, safety contract, and control surfaces
 - lightweight local model-fit scoring by task type, declared strengths, context, and estimated VRAM
 - manifest-listed portable skills that lazy-load trusted built-in packages instead of executing on CLI startup
+- DOX-style root and path-local `AGENTS.md` contracts for Codex, Claude Code, Antigravity, and similar coding shells
 - cautious `SECURITY.md` guidance for LAN-only operation, approval boundaries, and personal-data hygiene
 
 Not included yet:

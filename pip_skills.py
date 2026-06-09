@@ -377,6 +377,14 @@ def refresh_system_manifest(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
+def inspect_dox(args: argparse.Namespace) -> dict[str, Any]:
+    import pip_dox
+    return {
+        "skill": "inspect_dox",
+        "status": pip_dox.inspect_dox(),
+    }
+
+
 def inspect_model_registry(args: argparse.Namespace) -> dict[str, Any]:
     import pip_model_registry
     return {
@@ -1058,6 +1066,16 @@ SKILLS: dict[str, tuple[SkillSpec, Callable[[argparse.Namespace], dict[str, Any]
             permissions=["write memory folder"],
         ),
         refresh_system_manifest,
+    ),
+    "inspect_dox": (
+        SkillSpec(
+            name="inspect_dox",
+            description="Validate Pip's DOX/AGENTS.md context tree and child indexes for coding-agent handoffs.",
+            inputs=[],
+            outputs=["DOX tree status, documents, indexes, and errors"],
+            permissions=["read repository documentation"],
+        ),
+        inspect_dox,
     ),
     "inspect_model_registry": (
         SkillSpec(
