@@ -2,7 +2,10 @@
 from __future__ import annotations
 
 import json
+import os
+import re
 import sys
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -34,6 +37,29 @@ INTENT_MULTIPLIERS = {
     "blender_recipe": 0.8,
     "skill": 1.2,
     "sieve": 0.7,
+    "reword": 0.6,
+}
+
+# Builtin (in-repo) sieve patterns. Word-boundary matched so ordinary words
+# like "knowledge" (contains "now") or "secretary" (contains "secret") do not
+# trip a pressure hit. Used when the richer external Signal Sieve is absent.
+_FALLBACK_PATTERNS = {
+    "pressure": [
+        r"\burgent\b", r"\bmust\b", r"\bnow\b", r"\bimmediately\b",
+        r"\basap\b", r"\bhurry\b", r"\bright away\b", r"\bno time\b",
+    ],
+    "certainty": [
+        r"\balways\b", r"\bnever\b", r"\beveryone\b", r"\bnobody\b",
+        r"\bguaranteed\b", r"\bdefinitely\b", r"\bobviously\b",
+    ],
+    "manipulation": [
+        r"\bsecret\b", r"\bexclusive\b", r"\bbreakthrough\b", r"\bmiracle\b",
+        r"\bhidden\b", r"\bonly today\b", r"\blast chance\b", r"\bdon'?t tell\b",
+    ],
+}
+_FALLBACK_COMPILED = {
+    cat: [re.compile(p, re.IGNORECASE) for p in pats]
+    for cat, pats in _FALLBACK_PATTERNS.items()
 }
 
 DEFAULT_STATE = {
@@ -55,7 +81,9 @@ def utc_now() -> str:
 
 
 def today_key() -> str:
-    return utc_now()[:10]
+    # Local calendar day, so the daily budget resets at the user's midnight
+    # rather than UTC midnight.
+    return datetime.now().strftime("%Y-%m-%d")
 
 
 def state_path() -> Path:
@@ -95,35 +123,81 @@ def load_state() -> dict[str, Any]:
     return state
 
 
+def _atomic_write(path: Path, text: str) -> None:
+    """Write via a temp file + os.replace so a concurrent reader/writer never
+    sees a half-written JSON state file."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=path.name + ".", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(text)
+        os.replace(tmp, path)
+    finally:
+        if os.path.exists(tmp):
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+
+
 def save_state(state: dict[str, Any]) -> None:
     path = state_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
     state["events"] = state.get("events", [])[-200:]
     state["user_nudges"] = state.get("user_nudges", [])[-50:]
-    path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+    _atomic_write(path, json.dumps(state, indent=2))
+
+
+def _count_hits(text: str, category: str) -> int:
+    return sum(1 for pat in _FALLBACK_COMPILED[category] if pat.search(text))
 
 
 def _fallback_sieve(text: str) -> dict[str, Any]:
-    lowered = (text or "").lower()
-    pressure_hits = sum(
-        phrase in lowered
-        for phrase in ["urgent", "must", "now", "always", "never", "guaranteed", "secret", "breakthrough"]
-    )
-    pressure = min(1.0, pressure_hits / 4)
-    action = "seek_receipts" if pressure >= 0.5 else "treat_as_lead"
+    """Deterministic, in-repo sieve. Used when the richer external Signal Sieve
+    module is not present (e.g. a fresh public clone). Word-boundary matched to
+    avoid substring false positives, and it populates the same score keys
+    (manipulation_risk / certainty_bias / noise) the Flow Master reads."""
+    text = text or ""
+    pressure_hits = _count_hits(text, "pressure")
+    certainty_hits = _count_hits(text, "certainty")
+    manipulation_hits = _count_hits(text, "manipulation")
+
+    pressure = min(1.0, pressure_hits / 3)
+    certainty_bias = min(1.0, certainty_hits / 3)
+    manipulation_risk = min(1.0, manipulation_hits / 3)
+    noise = min(1.0, (pressure_hits + certainty_hits + manipulation_hits) / 6)
+
+    if pressure >= 0.66 or manipulation_risk >= 0.66:
+        action = "seek_receipts"
+    elif pressure >= 0.33 or manipulation_risk >= 0.33 or certainty_bias >= 0.66:
+        action = "treat_as_lead"
+    else:
+        action = "treat_as_lead"
+
     return {
         "recommended_action": action,
-        "triage_summary": "Fallback token guard heuristic used because local Signal Sieve was unavailable.",
-        "scores": {"pressure": pressure, "overall_confidence": 0.35, "signal": 0.35, "noise": pressure},
+        "triage_summary": "Built-in Pip sieve heuristic (external Signal Sieve module not present).",
+        "scores": {
+            "pressure": round(pressure, 3),
+            "manipulation_risk": round(manipulation_risk, 3),
+            "certainty_bias": round(certainty_bias, 3),
+            "noise": round(noise, 3),
+            "signal": round(1.0 - noise, 3),
+            "overall_confidence": 0.4,
+        },
         "flags": [],
         "questions_to_ask": [],
-        "capsule": "Fallback sieve: local signal-sieve import unavailable.",
+        "capsule": "Built-in sieve: external signal-sieve module unavailable; using bundled heuristic.",
+        "builtin": True,
     }
 
 
 def analyze_signal(text: str, source_type: str = "first_hand", source_name: str = "Pip user interaction") -> dict[str, Any]:
-    if SIGNAL_SIEVE_DIR.exists() and str(SIGNAL_SIEVE_DIR) not in sys.path:
-        sys.path.insert(0, str(SIGNAL_SIEVE_DIR))
+    if not SIGNAL_SIEVE_DIR.exists():
+        return _fallback_sieve(text)
+    # Append (not front-insert) so the external sieve dir cannot shadow stdlib
+    # or in-repo modules; the sieve's own relative imports still resolve.
+    if str(SIGNAL_SIEVE_DIR) not in sys.path:
+        sys.path.append(str(SIGNAL_SIEVE_DIR))
     try:
         from signal_sieve import analyze
 
@@ -170,10 +244,13 @@ def assess_interaction(
     intent: str = "chat",
     source_type: str = "first_hand",
     source_name: str = "Pip user interaction",
+    signal: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     state = load_state()
     prompt_guard = pip_prompt_guard.check_prompt_guard(text)
-    sieve = analyze_signal(text, source_type=source_type, source_name=source_name)
+    # Reuse a precomputed sieve result when the caller already ran it (the chat
+    # gate does), so we don't analyze the same text twice.
+    sieve = signal if signal is not None else analyze_signal(text, source_type=source_type, source_name=source_name)
     action = sieve.get("recommended_action", "treat_as_lead")
     mapping = ACTION_MAPPING.get(action, ACTION_MAPPING["treat_as_background"])
     if prompt_guard["verdict"] == "block":

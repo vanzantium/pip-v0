@@ -666,9 +666,16 @@ class PipEngine:
         # only happens if both the Token Governor allows the budget AND the Flow
         # Master is not under DWELL/SHED pressure. Mirrors the /goal gate above.
         import pip_token_guard
+        # Run the sieve once and share it with both gates (the Flow Master and
+        # the Token Governor both consume the same signal).
+        shared_signal = pip_token_guard.analyze_signal(
+            message, source_type="first_hand", source_name="Pip chat"
+        )
         try:
             import pip_flow_master
-            flow = pip_flow_master.assess_flow_pressure(message, intent="chat")
+            flow = pip_flow_master.assess_flow_pressure(
+                message, intent="chat", signal=shared_signal
+            )
         except Exception:
             flow = {"flow_state": "BUILD", "recommended_response": ""}
         gov = pip_token_guard.assess_interaction(
@@ -676,6 +683,7 @@ class PipEngine:
             intent="chat",
             source_type="first_hand",
             source_name="Pip chat",
+            signal=shared_signal,
         )
         if flow.get("flow_state") in {"DWELL", "SHED"} or not gov["allowed"]:
             pip_token_guard.record_event(
@@ -760,8 +768,11 @@ class PipEngine:
                         chunk = json.loads(line.decode("utf-8"))
                         if "message" in chunk and "content" in chunk["message"]:
                             full_text += chunk["message"]["content"]
-                # Record the spend: rough token estimate from produced characters.
-                measured = max(1, len(full_text) // 4)
+                # Record the spend across the full exchange: system prompt + RAG
+                # context + user message (input) plus the produced output. The
+                # earlier estimate only saw the bare message, so input matters.
+                input_chars = len(system_prompt) + len(message)
+                measured = max(1, (input_chars + len(full_text)) // 4)
                 pip_token_guard.record_event(
                     "chat",
                     estimated_tokens=gov["estimated_tokens"],

@@ -172,9 +172,8 @@ def load_state() -> dict[str, Any]:
 
 def save_state(state: dict[str, Any]) -> None:
     path = state_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
     state["receipts"] = state.get("receipts", [])[-50:]
-    path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+    pip_token_guard._atomic_write(path, json.dumps(state, indent=2))
 
 
 def _pattern_hits(text: str) -> dict[str, list[str]]:
@@ -227,9 +226,13 @@ def assess_flow_pressure(
     source_type: str = "first_hand",
     source_name: str = "Pip Flow Master",
     record: bool = True,
+    signal: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     text = content or ""
-    signal = pip_token_guard.analyze_signal(text, source_type=source_type, source_name=source_name)
+    # Reuse a precomputed sieve result when provided (avoids a second sieve run
+    # when the caller already analyzed this text).
+    if signal is None:
+        signal = pip_token_guard.analyze_signal(text, source_type=source_type, source_name=source_name)
     token_status = pip_token_guard.status()
     scores = signal.get("scores") or {}
     signal_pressure = float(scores.get("pressure", 0.0) or 0.0)

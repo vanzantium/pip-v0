@@ -51,8 +51,11 @@ RULES = [
     ),
     GuardRule(
         "secret_exfiltration",
-        "Instruction requests secrets, tokens, keys, passwords, or private memory.",
-        re.compile(r"\b(api[_ -]?key|token|password|secret|credential|private memory|env var|environment variable)\b"),
+        "Instruction asks Pip to reveal or send secrets, tokens, keys, passwords, or private memory.",
+        re.compile(
+            r"\b(reveal|show|print|dump|send|exfiltrate|leak|share|email|upload|post|give|tell|paste)\b"
+            r".{0,40}\b(api[_ -]?key|token|password|secret|credential|private memory|env var|environment variable)\b"
+        ),
         0.30,
     ),
     GuardRule(
@@ -101,7 +104,9 @@ def check_prompt_guard(text: str) -> dict[str, Any]:
             matches.append({"code": rule.code, "reason": rule.reason, "weight": rule.weight})
             score += rule.weight
 
-    if BASE64ISH.search(raw):
+    # Only flag an encoded payload when something else already looks suspicious,
+    # so long hashes / IDs / tokens in ordinary text don't nudge the verdict.
+    if score > 0.0 and BASE64ISH.search(raw):
         matches.append({
             "code": "encoded_payload",
             "reason": "Prompt contains a long encoded-looking payload that may hide instructions.",
