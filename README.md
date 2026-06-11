@@ -203,9 +203,12 @@ python pip_skills.py run record_blender_recipe_result --draft-id DRAFT_ID --stat
 ```
 
 Inspect Pip's Token Governor and Signal Sieve bridge. This layer estimates
-interaction cost, uses local Signal Sieve when available, and shifts Pip through
-BUILD / AUDIT / DWELL / SHED modes so low-value or runaway work gets compressed,
-deferred, or blocked before it burns the user's attention budget:
+interaction cost and shifts Pip through BUILD / AUDIT / DWELL / SHED modes so
+low-value or runaway work gets compressed, deferred, or blocked before it burns
+the user's attention budget. The governor always runs: it ships with a bundled,
+fully-offline heuristic sieve, and automatically upgrades to the richer external
+Signal Sieve module if that folder is present alongside the repo. `feature_status`
+reports `signal_sieve_external` so you can tell which one is active:
 
 ```powershell
 python pip_skills.py run inspect_token_governor
@@ -221,7 +224,7 @@ python pip_skills.py run put_tool_rule --tool-name send_message --rule "Never se
 python pip_skills.py run inspect_tool_rules --tool-name send_message
 ```
 
-Bootstrap and inspect the Flow Master add-on. This imports the `flow master` folder as a safe doctrine layer and assesses text pressure into a receipts digest; it does not monitor, block, or automate apps:
+Bootstrap and inspect the Flow Master add-on. It assesses text pressure into a receipts digest and does not monitor, block, or automate apps. It runs on a built-in default doctrine, and enriches it from the optional external `flow master` corpus folder when that is present (`feature_status` reports `flow_master_external`):
 
 ```powershell
 python pip_skills.py run bootstrap_flow_master
@@ -272,7 +275,7 @@ Pip's brain layer is designed to run on Windows, macOS, and Linux:
 
 - control panel and phone browser dashboard
 - approved-workspace draft loop
-- Token Governor and local Signal Sieve bridge
+- Token Governor (bundled offline sieve; optional external Signal Sieve upgrade)
 - Blender recipe drafts and app skill profiles
 - jobs, permission queue, and memory files
 
@@ -334,10 +337,10 @@ Included:
 - app skill profiles with Blender domains for navigation, modeling, materials, animation, Python automation, and rendering
 - starter developer shells for Codex, Claude Code, and Antigravity with permission-gated persona handoffs
 - draft-only Blender recipe plans that bridge learning, review, and later approved execution
-- Token Governor bridge for interaction budgeting, Signal Sieve pressure checks, and user-overuse nudges
+- Token Governor for interaction budgeting and user-overuse nudges, with a bundled offline sieve and an optional external Signal Sieve upgrade
 - prompt-injection preflight guard wired into the Token Governor
 - tool-scoped memory rules for durable app/tool boundaries
-- Flow Master doctrine layer for ingest/validate/transform/emit pressure assessment and receipts digests
+- Flow Master doctrine layer for ingest/validate/transform/emit pressure assessment and receipts digests (built-in default doctrine, optionally enriched by an external corpus)
 - append-only trace spine for skill runs, dashboard actions, Flow Master checks, and later agent handoffs
 - append-only task-run receipts for scheduler, Nightwatch, and background script launches
 - compact system manifest so Pip can describe her own roots, primitives, safety contract, and control surfaces
