@@ -983,8 +983,8 @@ class PipEngine:
                             f"Since I am a fully localized agent, I need you to install Ollama and run `ollama run {target_model}` "
                             "in your terminal so I can think properly!"
                         )
-        except Exception as e:
-            return f"My language center glitched: {e}"
+            except Exception as e:
+                return f"My language center glitched: {e}"
 
     def propose_reword(self, card: dict, thermal: ThermalState) -> dict:
         import pip_flow_master
