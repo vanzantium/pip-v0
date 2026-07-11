@@ -914,7 +914,11 @@ class PipEngine:
         data = {
             "model": target_model,
             "prompt": raw_prompt,
-            "stream": True
+            "stream": True,
+            "options": {
+                "temperature": 0.4,
+                "num_ctx": 2048
+            }
         }
         
         import requests
@@ -927,7 +931,7 @@ class PipEngine:
         
         for attempt in range(max_retries + 1):
             try:
-                with requests.post(url, json=data, stream=True, timeout=300) as response:
+                with requests.post(url, json=data, stream=True, timeout=900) as response:
                     response.raise_for_status()
                     full_text = ""
                     for line in response.iter_lines():
