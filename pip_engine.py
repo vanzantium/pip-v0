@@ -626,7 +626,7 @@ class PipEngine:
         if message.strip().lower().startswith("/lesson "):
             try:
                 import sys
-                smart_dir = str(Path(__file__).parent.parent / "work_smart")
+                smart_dir = str(Path(__file__).resolve().parent.parent.parent / "work_smart")
                 if smart_dir not in sys.path:
                     sys.path.insert(0, smart_dir)
                 import lessons
@@ -733,7 +733,7 @@ class PipEngine:
         triage_context = ""
         try:
             import sys
-            smart_dir = str(Path(__file__).parent.parent / "work_smart")
+            smart_dir = str(Path(__file__).resolve().parent.parent.parent / "work_smart")
             if smart_dir not in sys.path:
                 sys.path.insert(0, smart_dir)
             import pip_triage
@@ -759,7 +759,7 @@ class PipEngine:
                 return f"[Triaged -> {d['target']}] {res.get('message', 'Dispatched')}"
             elif d["action"] == "defer" and d["target"]:
                 from datetime import datetime
-                handoff_dir = Path(__file__).parent.parent.parent.parent / "01_agent_context" / "handoffs"
+                handoff_dir = Path(__file__).resolve().parent.parent.parent.parent.parent / "01_agent_context" / "handoffs"
                 handoff_dir.mkdir(parents=True, exist_ok=True)
                 stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
                 fp = handoff_dir / f"@CLAUDE_defer_{d['target']}_{stamp}.md"
@@ -889,7 +889,7 @@ class PipEngine:
 
         # === AI Memory Vault Boot ===
         try:
-            vault_index_path = Path(__file__).parent.parent.parent.parent / "01_agent_context" / "PIP-INDEX.md"
+            vault_index_path = Path(__file__).resolve().parent.parent.parent.parent.parent / "01_agent_context" / "PIP-INDEX.md"
             if vault_index_path.exists():
                 vault_content = vault_index_path.read_text(encoding="utf-8")
                 rag_context = "\n\n=== VAULT ROOT INDEX (CRITICAL RULES) ===\n" + vault_content + "\n" + rag_context
