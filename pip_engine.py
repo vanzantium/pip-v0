@@ -917,7 +917,7 @@ class PipEngine:
         data = {
             "model": target_model,
             "messages": messages_payload,
-            "stream": True
+            "stream": False
         }
         
         req = urllib.request.Request(url, data=json.dumps(data).encode("utf-8"), headers={"Content-Type": "application/json"})
