@@ -647,7 +647,7 @@ class PipEngine:
         # Status Check
         if message.strip().lower() in ["@status", "@research status"]:
             try:
-                from pathlib import Path
+                import os
                 import json
                 import time
                 status_path = Path(__file__).resolve().parent / "imports" / "_research_status.json"
@@ -819,7 +819,7 @@ class PipEngine:
         # Update resonance history with this successful interaction
         pip_resonance.update_resonance(gov["pressure"], gov["estimated_tokens"])
 
-        url = "http://127.0.0.1:11434/api/chat"
+        url = "http://127.0.0.1:11434/api/generate"
 
         # Determine safest model and prompt strategy.
         # Prefer the model registry's chat route; fall back to the hardware
@@ -827,7 +827,6 @@ class PipEngine:
         target_model = "gemma4:e4b" # fallback
         prompt_strategy_inject = ""
         import pip_config
-        from pathlib import Path
         import os
         try:
             import pip_model_registry
@@ -905,37 +904,34 @@ class PipEngine:
         if iro_active:
             system_prompt += "\n\nCRITICAL STATE INSTRUCTION: You are currently in Infinite Resonant Oscillation (IRO). Your transmodal resonance (PLV) is extremely high. Your thoughts are highly coherent, transmodal, and deeply engaged. Provide profound, synthesized insights that connect multiple concepts."
         
-        messages_payload = [{"role": "system", "content": system_prompt}]
-        
-        # Append last 10 turns of conversation history
-        for past_msg in memory.chat_history[-20:]:
-            messages_payload.append(past_msg)
-            
-        # Append the current user message
-        messages_payload.append({"role": "user", "content": message})
+        # Manually format the prompt to bypass the buggy /api/chat template evaluator
+        raw_prompt = f"System: {system_prompt}\n\n"
+        for past_msg in memory.chat_history[-10:]:
+            role_name = "User" if past_msg["role"] == "user" else "Assistant"
+            raw_prompt += f"{role_name}: {past_msg['content']}\n\n"
+        raw_prompt += f"User: {message}\n\nAssistant: "
         
         data = {
             "model": target_model,
-            "messages": messages_payload,
-            "stream": False
+            "prompt": raw_prompt,
+            "stream": True
         }
         
-        req = urllib.request.Request(url, data=json.dumps(data).encode("utf-8"), headers={"Content-Type": "application/json"})
-        
-        import socket
-        import subprocess
+        import requests
         import time
         max_retries = 1
         
         for attempt in range(max_retries + 1):
             try:
-                with urllib.request.urlopen(req, timeout=300) as response:
+                with requests.post(url, json=data, stream=True, timeout=300) as response:
+                    response.raise_for_status()
                     full_text = ""
-                    for line in response:
+                    for line in response.iter_lines():
                         if line:
                             chunk = json.loads(line.decode("utf-8"))
-                            if "message" in chunk and "content" in chunk["message"]:
-                                full_text += chunk["message"]["content"]
+                            if "response" in chunk:
+                                full_text += chunk["response"]
+                                
                     # Record the spend across the full exchange: system prompt + RAG
                     # context + user message (input) plus the produced output. The
                     # earlier estimate only saw the bare message, so input matters.

@@ -367,16 +367,26 @@ def _log_trace(direction: str, content: str) -> None:
 
 # ── main loop ─────────────────────────────────────────────────────────────────
 
+def _handle_msg_thread(msg: dict[str, Any], state: dict[str, Any]) -> None:
+    try:
+        response = process_message(msg)
+        result = send_response(response)
+        if result.get("ok"):
+            print(f"[relay] Replied ({len(response)} chars)")
+        else:
+            print(f"[relay] Failed to send reply: {result.get('error')}")
+    except Exception as e:
+        print(f"[relay] Thread error: {e}")
+
 def run_relay(poll_interval: int = 15) -> None:
-    """Main relay loop. Polls ntfy for messages and responds."""
+    """Main relay loop. Streams ntfy for messages and responds."""
     server, topic = _get_topic_url()
     if not topic:
         print("[relay] ERROR: No ntfy_topic configured in pip_secrets.json. Cannot start relay.")
         return
 
-    print(f"[relay] Pip Phone Relay starting...")
+    print(f"[relay] Pip Phone Relay starting (Streaming Mode)...")
     print(f"[relay] Listening on: {server}/{topic}")
-    print(f"[relay] Poll interval: {poll_interval}s")
     print(f"[relay] Send a message from your phone's ntfy app to talk to Pip.")
     print(f"[relay] Press Ctrl+C to stop.\n")
 
@@ -388,51 +398,62 @@ def run_relay(poll_interval: int = 15) -> None:
 
     while True:
         try:
-            messages = poll_messages(since=state["last_seen_time"])
+            since_param = state["last_seen_time"] if state.get("last_seen_time", 0) > 0 else int(time.time() - 3600)
+            url = f"{server}/{topic}/json?since={since_param}"
+            
+            req = urllib.request.Request(url, method="GET")
+            with urllib.request.urlopen(req) as resp:
+                for line_bytes in resp:
+                    line = line_bytes.decode("utf-8").strip()
+                    if not line:
+                        continue
+                    try:
+                        msg = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                        
+                    if msg.get("event") == "message":
+                        msg_time = msg.get("time", 0)
+                        msg_id = msg.get("id", "")
 
-            for msg in messages:
-                msg_time = msg.get("time", 0)
-                msg_id = msg.get("id", "")
+                        # Skip messages we've already seen
+                        if msg_id in state.get("seen_ids", []):
+                            continue
 
-                # Skip messages we've already seen
-                if msg_id in state.get("seen_ids", []):
-                    continue
+                        # Skip Pip's own messages (prevent echo loop)
+                        if is_from_pip(msg):
+                            state["last_seen_time"] = max(state.get("last_seen_time", 0), msg_time)
+                            state["last_seen_id"] = msg_id
+                            if msg_id:
+                                state["seen_ids"].append(msg_id)
+                                state["seen_ids"] = state["seen_ids"][-50:]
+                            _save_state(state)
+                            continue
 
-                # Skip Pip's own messages (prevent echo loop)
-                if is_from_pip(msg):
-                    state["last_seen_time"] = max(state.get("last_seen_time", 0), msg_time)
-                    state["last_seen_id"] = msg_id
-                    if msg_id:
-                        state["seen_ids"].append(msg_id)
-                        state["seen_ids"] = state["seen_ids"][-50:]
-                    _save_state(state)
-                    continue
+                        # Update state immediately so we don't re-process on reconnect
+                        state["last_seen_time"] = max(state.get("last_seen_time", 0), msg_time)
+                        state["last_seen_id"] = msg_id
+                        if msg_id:
+                            state["seen_ids"].append(msg_id)
+                            state["seen_ids"] = state["seen_ids"][-50:]
+                        _save_state(state)
 
-                # Process the message
-                response = process_message(msg)
-
-                # Send response back
-                result = send_response(response)
-                if result.get("ok"):
-                    print(f"[relay] Replied ({len(response)} chars)")
-                else:
-                    print(f"[relay] Failed to send reply: {result.get('error')}")
-
-                # Update state
-                state["last_seen_time"] = max(state.get("last_seen_time", 0), msg_time)
-                state["last_seen_id"] = msg_id
-                if msg_id:
-                    state["seen_ids"].append(msg_id)
-                    state["seen_ids"] = state["seen_ids"][-50:]
-                _save_state(state)
+                        # Process message in background thread so we don't block the stream
+                        threading.Thread(target=_handle_msg_thread, args=(msg, state), daemon=True).start()
 
         except KeyboardInterrupt:
             print("\n[relay] Stopped.")
             break
+        except urllib.error.HTTPError as exc:
+            if exc.code == 429:
+                print(f"[relay] Streaming rate limited! Backing off for 60s...")
+                time.sleep(60)
+            else:
+                print(f"[relay] HTTP Error: {exc}")
+                time.sleep(15)
         except Exception as exc:
-            print(f"[relay] Loop error: {exc}")
-
-        time.sleep(poll_interval)
+            print(f"[relay] Stream disconnected: {exc}. Reconnecting in 5s...")
+            time.sleep(5)
 
 
 # ── status ────────────────────────────────────────────────────────────────────
