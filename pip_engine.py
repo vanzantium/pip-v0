@@ -919,6 +919,10 @@ class PipEngine:
         
         import requests
         import time
+        import socket
+        import subprocess
+        import urllib.error
+        import os
         max_retries = 1
         
         for attempt in range(max_retries + 1):
@@ -953,7 +957,7 @@ class PipEngine:
                     self.save_memory(memory)
                     
                     return full_text
-            except (socket.timeout, urllib.error.URLError) as e:
+            except (requests.exceptions.RequestException, socket.timeout, urllib.error.URLError) as e:
                 if attempt < max_retries:
                     print(f"[Engine] Ollama connection failed ({e}). Watchdog triggered: restarting ollama...")
                     if os.name == "nt":
@@ -968,7 +972,7 @@ class PipEngine:
                     print("[Engine] Retrying generation after watchdog restart...")
                     continue
                 else:
-                    if isinstance(e, socket.timeout):
+                    if isinstance(e, requests.exceptions.Timeout) or isinstance(e, socket.timeout):
                         return (
                             f"Whoa, my brain just timed out! Your PC might be struggling to run '{target_model}'. "
                             "Try switching to a lighter model in the control panel or closing some background apps!"
