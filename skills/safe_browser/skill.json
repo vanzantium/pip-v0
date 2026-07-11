@@ -1,0 +1,18 @@
+{
+  "skills": {
+    "safe_browser_read": {
+      "name": "safe_browser_read",
+      "description": "Open a URL in a browser and read the text content of the page. This is a read-only operation.",
+      "inputs": ["--url url"],
+      "outputs": ["page text content"],
+      "permissions": ["safe web read"]
+    },
+    "safe_browser_search": {
+      "name": "safe_browser_search",
+      "description": "Perform a Google search and return the text results. Read-only.",
+      "inputs": ["--query text"],
+      "outputs": ["search results text"],
+      "permissions": ["safe web search"]
+    }
+  }
+}

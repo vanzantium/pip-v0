@@ -82,7 +82,7 @@ If you output anything other than JSON, it will fail.
                     "stream": False,
                     "format": "json" # Force JSON output if supported
                 }
-                url = "http://localhost:11434/api/chat"
+                url = "http://127.0.0.1:11434/api/chat"
                 req = urllib.request.Request(url, data=json.dumps(data).encode("utf-8"), headers={"Content-Type": "application/json"})
                 
                 with urllib.request.urlopen(req, timeout=300) as response:

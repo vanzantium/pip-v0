@@ -112,6 +112,7 @@ class MemoryState:
     cooldowns: dict[str, float] = field(default_factory=dict)
     compost_log: list[dict[str, Any]] = field(default_factory=list)
     proposal_history: list[dict[str, Any]] = field(default_factory=list)
+    chat_history: list[dict[str, str]] = field(default_factory=list)
 
 
 class PipEngine:
@@ -136,6 +137,7 @@ class PipEngine:
             cooldowns=raw.get("cooldowns", {}),
             compost_log=raw.get("compost_log", []),
             proposal_history=raw.get("proposal_history", []),
+            chat_history=raw.get("chat_history", []),
         )
 
     def save_memory(self, memory: MemoryState) -> None:
@@ -617,6 +619,50 @@ class PipEngine:
         import urllib.request
         import json
         
+        # Load memory for chat history
+        memory = self.load_memory()
+
+        # Manual Lesson Capture
+        if message.strip().lower().startswith("/lesson "):
+            try:
+                import sys
+                smart_dir = str(Path(__file__).parent.parent / "work_smart")
+                if smart_dir not in sys.path:
+                    sys.path.insert(0, smart_dir)
+                import lessons
+                
+                content = message.strip()[8:].strip()
+                parts = [p.strip() for p in content.split("|")]
+                if len(parts) >= 3:
+                    topic = parts[0]
+                    what_happened = parts[1]
+                    lesson_text = parts[2]
+                    lessons.record(topic, what_happened, lesson_text)
+                    return f"Lesson recorded! Topic: {topic}"
+                else:
+                    return "Format must be: `/lesson Topic | What happened | The lesson`"
+            except Exception as e:
+                return f"Failed to record lesson: {e}"
+
+        # Status Check
+        if message.strip().lower() in ["@status", "@research status"]:
+            try:
+                from pathlib import Path
+                import json
+                import time
+                status_path = Path(__file__).resolve().parent / "imports" / "_research_status.json"
+                if status_path.exists():
+                    data = json.loads(status_path.read_text(encoding="utf-8"))
+                    if data.get("status") == "running":
+                        elapsed = int(time.time() - data.get("start_time", time.time()))
+                        mins = elapsed // 60
+                        secs = elapsed % 60
+                        topic = data.get("topic", "unknown topic")
+                        return f"Deep Research is CURRENTLY RUNNING.\nTopic: '{topic}'\nElapsed time: {mins}m {secs}s."
+                return "Deep Research is currently idle (no active task)."
+            except Exception as e:
+                return f"Failed to check status: {e}"
+
         # Persona Task Routing (e.g., "@anti build me a script")
         if message.strip().startswith("@"):
             parts = message.strip().split(" ", 1)
@@ -635,6 +681,27 @@ class PipEngine:
             goal_text = message.strip()[5:].strip()
             if not goal_text:
                 return "You didn't give me a goal! Try `/goal do something for me`."
+            
+            # --- Learning Hub Deterministic Policy Check ---
+            try:
+                import requests
+                decision = requests.post("http://127.0.0.1:8050/decide", json={
+                    "facts": {
+                        "stakes": "high",
+                        "action": "autonomous_goal",
+                        "target": goal_text,
+                        "skeptic_pass_applied": False,
+                        "reviewed": False,
+                        "ledger": "main"
+                    }
+                }, timeout=3).json()
+                if decision.get("triggered_events"):
+                    events_str = ", ".join(decision["triggered_events"])
+                    return f"I cannot execute this goal. The Learning Hub blocked it due to policy violations: {events_str}."
+            except Exception as e:
+                print(f"[Hub] Error checking policy: {e}")
+            # -----------------------------------------------
+
             
             import pip_safety
             import pip_token_guard
@@ -662,6 +729,50 @@ class PipEngine:
             return f"I queued that goal for approval instead of starting it immediately. Permission request: {request['id']}."
 
         # === Governor + Flow gate (broad chat path) ===
+        # === Work Smart Triage Reflex ===
+        triage_context = ""
+        try:
+            import sys
+            smart_dir = str(Path(__file__).parent.parent / "work_smart")
+            if smart_dir not in sys.path:
+                sys.path.insert(0, smart_dir)
+            import pip_triage
+            import json
+            import re
+            
+            # Infer task type crudely
+            msg_lower = message.lower()
+            if any(w in msg_lower for w in ["refactor", "fix", "build", "code"]):
+                inferred_type = "code_build"
+            elif any(w in msg_lower for w in ["summarize", "analyze", "compare", "synthesize"]):
+                inferred_type = "synthesis"
+            elif any(w in msg_lower for w in ["look up", "find", "search", "retrieve"]):
+                inferred_type = "retrieval"
+            else:
+                inferred_type = "chat"
+                
+            d = pip_triage.decide(message, task_type=inferred_type)
+            
+            if d["action"] == "route" and d["target"]:
+                import pip_personas
+                res = pip_personas.dispatch_task(d["target"], message)
+                return f"[Triaged -> {d['target']}] {res.get('message', 'Dispatched')}"
+            elif d["action"] == "defer" and d["target"]:
+                from datetime import datetime
+                handoff_dir = Path(__file__).parent.parent.parent.parent / "01_agent_context" / "handoffs"
+                handoff_dir.mkdir(parents=True, exist_ok=True)
+                stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+                fp = handoff_dir / f"@CLAUDE_defer_{d['target']}_{stamp}.md"
+                fp.write_text(f"Task: {message}\nRationale: {d['rationale']}\nLessons: {json.dumps(d['lessons'])}", encoding="utf-8")
+                return f"I realized this requires a larger context model. I've left a brief for {d['target']} in the handoffs folder."
+            elif d["action"] == "attempt_local":
+                if d["grounding"]:
+                    triage_context += "\nCorpus Grounding (retrieve before reason):\n" + "\n".join(g["text"] for g in d["grounding"])
+                if d["lessons"]:
+                    triage_context += "\nPast Lessons to Remember:\n" + "\n".join(l["lesson"] for l in d["lessons"])
+        except Exception as e:
+            print(f"[Triage] Error during decide reflex: {e}")
+
         # The deterministic heuristic floor is "defer/compress" — a model call
         # only happens if both the Token Governor allows the budget AND the Flow
         # Master is not under DWELL/SHED pressure. Mirrors the /goal gate above.
@@ -678,9 +789,14 @@ class PipEngine:
             )
         except Exception:
             flow = {"flow_state": "BUILD", "recommended_response": ""}
+            
+        import pip_resonance
+        current_res = pip_resonance.get_current_resonance()
+        iro_active = current_res.get("iro_active", False)
+        
         gov = pip_token_guard.assess_interaction(
             message,
-            intent="chat",
+            intent="research" if iro_active else "chat",
             source_type="first_hand",
             source_name="Pip chat",
             signal=shared_signal,
@@ -693,11 +809,17 @@ class PipEngine:
                 saved_tokens=gov["estimated_tokens"],
                 note="deferred by governor/flow",
             )
-            return gov.get("nudge") or flow.get("recommended_response") or (
+            nudge = gov.get("nudge")
+            if nudge and "Proceed normally" in nudge:
+                nudge = None
+            return nudge or flow.get("recommended_response") or (
                 "Let's let that settle for a moment — I'm easing off to keep things calm."
             )
+            
+        # Update resonance history with this successful interaction
+        pip_resonance.update_resonance(gov["pressure"], gov["estimated_tokens"])
 
-        url = "http://localhost:11434/api/chat"
+        url = "http://127.0.0.1:11434/api/chat"
 
         # Determine safest model and prompt strategy.
         # Prefer the model registry's chat route; fall back to the hardware
@@ -743,55 +865,124 @@ class PipEngine:
         except Exception as e:
             print(f"[RAG Engine] Error retrieving memory: {e}")
 
+        if triage_context:
+            rag_context += "\n" + triage_context
+
+        # === Waking Loop Internal Thoughts ===
+        try:
+            import os
+            main_ledger_path = Path.home() / ".waking_loop" / "ledgers" / "main.jsonl"
+            if main_ledger_path.exists():
+                ledger_lines = main_ledger_path.read_text(encoding="utf-8").strip().split("\n")
+                recent_thoughts = []
+                for line in ledger_lines[-5:]:
+                    if line.strip():
+                        t = json.loads(line)
+                        if not t.get("rejected"):
+                            recent_thoughts.append(t["text"])
+                if recent_thoughts:
+                    rag_context += "\n\nRecent internal thoughts (from your Waking Loop):\n"
+                    for t in recent_thoughts:
+                        rag_context += f"- {t}\n"
+        except Exception as e:
+            print(f"[Waking Loop] Error reading ledger: {e}")
+
+        # === AI Memory Vault Boot ===
+        try:
+            vault_index_path = Path(__file__).parent.parent.parent.parent / "01_agent_context" / "PIP-INDEX.md"
+            if vault_index_path.exists():
+                vault_content = vault_index_path.read_text(encoding="utf-8")
+                rag_context = "\n\n=== VAULT ROOT INDEX (CRITICAL RULES) ===\n" + vault_content + "\n" + rag_context
+        except Exception as e:
+            print(f"[Vault Boot] Error reading PIP-INDEX.md: {e}")
+
         import pip_dynamic_prompt
         system_prompt = pip_dynamic_prompt.generate_system_prompt(
             thermal_state=thermal,
             rag_context=rag_context
         )
         
+        if iro_active:
+            system_prompt += "\n\nCRITICAL STATE INSTRUCTION: You are currently in Infinite Resonant Oscillation (IRO). Your transmodal resonance (PLV) is extremely high. Your thoughts are highly coherent, transmodal, and deeply engaged. Provide profound, synthesized insights that connect multiple concepts."
+        
+        messages_payload = [{"role": "system", "content": system_prompt}]
+        
+        # Append last 10 turns of conversation history
+        for past_msg in memory.chat_history[-20:]:
+            messages_payload.append(past_msg)
+            
+        # Append the current user message
+        messages_payload.append({"role": "user", "content": message})
+        
         data = {
             "model": target_model,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": message}
-            ],
+            "messages": messages_payload,
             "stream": True
         }
         
         req = urllib.request.Request(url, data=json.dumps(data).encode("utf-8"), headers={"Content-Type": "application/json"})
-        try:
-            import socket
-            with urllib.request.urlopen(req, timeout=300) as response:
-                full_text = ""
-                for line in response:
-                    if line:
-                        chunk = json.loads(line.decode("utf-8"))
-                        if "message" in chunk and "content" in chunk["message"]:
-                            full_text += chunk["message"]["content"]
-                # Record the spend across the full exchange: system prompt + RAG
-                # context + user message (input) plus the produced output. The
-                # earlier estimate only saw the bare message, so input matters.
-                input_chars = len(system_prompt) + len(message)
-                measured = max(1, (input_chars + len(full_text)) // 4)
-                pip_token_guard.record_event(
-                    "chat",
-                    estimated_tokens=gov["estimated_tokens"],
-                    actual_tokens=measured,
-                    saved_tokens=0,
-                    note=f"chat via {target_model}",
-                )
-                return full_text
-        except socket.timeout:
-            return (
-                f"Whoa, my brain just timed out! Your PC might be struggling to run '{target_model}'. "
-                "Try switching to a lighter model in the control panel or closing some background apps!"
-            )
-        except urllib.error.URLError:
-            return (
-                "It looks like my local language engine (Ollama) isn't running! "
-                f"Since I am a fully localized agent, I need you to install Ollama and run `ollama run {target_model}` "
-                "in your terminal so I can think properly!"
-            )
+        
+        import socket
+        import subprocess
+        import time
+        max_retries = 1
+        
+        for attempt in range(max_retries + 1):
+            try:
+                with urllib.request.urlopen(req, timeout=300) as response:
+                    full_text = ""
+                    for line in response:
+                        if line:
+                            chunk = json.loads(line.decode("utf-8"))
+                            if "message" in chunk and "content" in chunk["message"]:
+                                full_text += chunk["message"]["content"]
+                    # Record the spend across the full exchange: system prompt + RAG
+                    # context + user message (input) plus the produced output. The
+                    # earlier estimate only saw the bare message, so input matters.
+                    input_chars = len(system_prompt) + len(message)
+                    measured = max(1, (input_chars + len(full_text)) // 4)
+                    pip_token_guard.record_event(
+                        "chat",
+                        estimated_tokens=gov["estimated_tokens"],
+                        actual_tokens=measured,
+                        saved_tokens=0,
+                        note=f"chat via {target_model}",
+                    )
+                    
+                    # Save chat history back to memory
+                    memory.chat_history.append({"role": "user", "content": message})
+                    memory.chat_history.append({"role": "assistant", "content": full_text})
+                    # Keep it bounded
+                    memory.chat_history = memory.chat_history[-20:]
+                    self.save_memory(memory)
+                    
+                    return full_text
+            except (socket.timeout, urllib.error.URLError) as e:
+                if attempt < max_retries:
+                    print(f"[Engine] Ollama connection failed ({e}). Watchdog triggered: restarting ollama...")
+                    if os.name == "nt":
+                        subprocess.run(["powershell", "-Command", "Stop-Process -Name ollama -Force -ErrorAction SilentlyContinue"], capture_output=True)
+                        subprocess.Popen(["ollama", "serve"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=0x08000000) # CREATE_NO_WINDOW
+                    else:
+                        subprocess.run(["pkill", "-9", "ollama"], capture_output=True)
+                        subprocess.Popen(["ollama", "serve"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    
+                    print("[Engine] Waiting 60 seconds for Ollama to boot back up...")
+                    time.sleep(60)
+                    print("[Engine] Retrying generation after watchdog restart...")
+                    continue
+                else:
+                    if isinstance(e, socket.timeout):
+                        return (
+                            f"Whoa, my brain just timed out! Your PC might be struggling to run '{target_model}'. "
+                            "Try switching to a lighter model in the control panel or closing some background apps!"
+                        )
+                    else:
+                        return (
+                            "It looks like my local language engine (Ollama) isn't running! "
+                            f"Since I am a fully localized agent, I need you to install Ollama and run `ollama run {target_model}` "
+                            "in your terminal so I can think properly!"
+                        )
         except Exception as e:
             return f"My language center glitched: {e}"
 
@@ -831,7 +1022,7 @@ class PipEngine:
         system_prompt = "You are Pip's formatting layer. Your job is to make proposal and evidence text gentler and clearer. Output strictly JSON with keys 'proposal' and 'evidence'."
         prompt = f"Proposal: {card.get('proposal', '')}\nEvidence: {card.get('evidence', '')}"
         
-        url = "http://localhost:11434/api/chat"
+        url = "http://127.0.0.1:11434/api/chat"
         payload = {
             "model": model,
             "messages": [

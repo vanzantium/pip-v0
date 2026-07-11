@@ -25,12 +25,16 @@ def read_brain_file(args: argparse.Namespace) -> dict[str, Any]:
         return {"skill": "read_brain_file", "ok": False, "message": str(e)}
 
 def write_brain_file(args: argparse.Namespace) -> dict[str, Any]:
-    import pip_config
-    brain_dir = pip_config.get_memory_path().resolve()
-    target = (brain_dir / getattr(args, "filename", "new_brain_file.txt")).resolve()
+    import pip_platform
+    brain_dir = pip_platform.BRAIN_ROOT
+    draft_dir = brain_dir / "99_inbox_unsorted" / "pip_drafts"
+    draft_dir.mkdir(parents=True, exist_ok=True)
     
-    if not target.is_relative_to(brain_dir):
-        return {"skill": "write_brain_file", "ok": False, "message": "Security Error: Attempted to write outside the Pip memory sandbox."}
+    filename = getattr(args, "filename", "new_brain_file.txt")
+    target = (draft_dir / filename).resolve()
+    
+    if not target.is_relative_to(draft_dir):
+        return {"skill": "write_brain_file", "ok": False, "message": "Security Error: Attempted to write outside the pip_drafts sandbox."}
         
     if target.suffix not in [".txt", ".json", ".md", ".py"]:
         target = target.with_suffix(".txt")

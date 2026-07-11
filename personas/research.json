@@ -1,0 +1,32 @@
+{
+  "name": "research",
+  "app_name": "Deep Research Orchestrator",
+  "window_title": "Deep Research",
+  "description": "Background orchestration process that queries Web, Internet Archive, and Brain Folder.",
+  "shell_type": "background_process",
+  "safety_mode": "auto",
+  "aliases": [
+    "research",
+    "scholar",
+    "deep dive"
+  ],
+  "capabilities": [
+    "Web Scrape",
+    "Internet Archive API",
+    "Local Knowledge Base Search"
+  ],
+  "handoff_guidance": [
+    "Use when Pip is unsure of a factual answer and needs extensive external context.",
+    "Do not use for executing code or editing files."
+  ],
+  "macros": {
+    "submit_task": [
+      {
+        "action": "trigger_nap"
+      },
+      {
+        "action": "execute_deep_research"
+      }
+    ]
+  }
+}

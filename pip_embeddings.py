@@ -9,7 +9,7 @@ from typing import Any
 import pip_config
 
 DEFAULT_MODEL = "nomic-embed-text"
-OLLAMA_URL = "http://localhost:11434"
+OLLAMA_URL = "http://127.0.0.1:11434"
 
 def pull_model(model_name: str) -> bool:
     """Uses subprocess to auto-pull an Ollama model if missing."""
@@ -109,13 +109,20 @@ class PersonaMemoryStore:
         return True
         
     def search(self, query: str, top_k: int = 3, threshold: float = 0.5) -> list[dict[str, Any]]:
-        """Find the top-k most relevant memories for a query."""
+        """Find the top-k most relevant memories for a query, expanded to their graph neighborhoods."""
         if not self.memories:
             return []
             
         query_vec = get_embedding(query)
         if not query_vec:
             return []
+            
+        # Try importing graph memory, gracefully fall back if it fails
+        try:
+            import pip_graph_memory
+            graph_available = True
+        except ImportError:
+            graph_available = False
             
         results = []
         for mem in self.memories:
@@ -124,7 +131,15 @@ class PersonaMemoryStore:
                 continue
             sim = cosine_similarity(query_vec, vec)
             if sim >= threshold:
-                results.append({"text": mem["text"], "score": sim, "timestamp": mem.get("timestamp", 0)})
+                base_text = mem["text"]
+                # Enhance text with graph neighborhood if available
+                if graph_available:
+                    # Using the exact text as the node ID for now
+                    enhanced_text = pip_graph_memory.format_neighborhood_for_llm(base_text, base_text)
+                else:
+                    enhanced_text = base_text
+                    
+                results.append({"text": enhanced_text, "score": sim, "timestamp": mem.get("timestamp", 0)})
                 
         results.sort(key=lambda x: x["score"], reverse=True)
         return results[:top_k]

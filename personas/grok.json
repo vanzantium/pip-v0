@@ -1,0 +1,39 @@
+{
+  "name": "grok",
+  "app_name": "Grok Build",
+  "window_title": "Grok",
+  "description": "Grok CLI agent. Uses the headless mode for safe execution.",
+  "shell_type": "developer_tool",
+  "safety_mode": "approval_required_for_ui_handoff",
+  "invoke": "subprocess_headless",
+  "aliases": [
+    "grok",
+    "xai grok",
+    "grok build"
+  ],
+  "cmd_bin": "grok.cmd",
+  "capabilities": [
+    "Fast Iteration",
+    "Humorous Explanations",
+    "Code Generation",
+    "Headless task run with captured JSON output"
+  ],
+  "headless": {
+    "cmd_plan": ["{cmd_bin}", "--single", "{task}", "--output-format", "json", "--permission-mode", "plan"],
+    "cmd_build": ["{cmd_bin}", "--single", "{task}", "--output-format", "json", "--permission-mode", "auto"],
+    "flag_notes": "Uses --single for headless output and --output-format json for parsing. permission-mode handles safety."
+  },
+  "handoff_guidance": [
+    "REQUIRES the grok CLI binary on PATH (set cmd_bin). Confirm it resolves before enabling.",
+    "Default to --permission-mode plan (read-only, captured JSON, reversible).",
+    "auto mode can write/run unsupervised - only inside an approved workspace behind a human-approved handoff.",
+    "Capture stdout (--output-format json), summarize in Pip's voice, text the result - like the opencode bridge."
+  ],
+  "macros": {
+    "focus_only": [{"action": "focus_window"}],
+    "submit_task": [
+      {"action": "trigger_nap"},
+      {"action": "execute_grok", "source": "task_input"}
+    ]
+  }
+}

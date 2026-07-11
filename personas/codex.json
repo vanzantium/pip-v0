@@ -29,6 +29,9 @@
     ],
     "submit_task": [
       {
+        "action": "trigger_nap"
+      },
+      {
         "action": "focus_window"
       },
       {

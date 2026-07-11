@@ -4,7 +4,7 @@
   "workspaces": {
     "garden_spiders": {
       "name": "Garden Spiders",
-      "root": "${BRAIN_ROOT}/Garden Spiders/project",
+      "root": "${BRAIN_ROOT}/04_worlds_lore_characters/worlds/Garden Spiders/project",
       "description": "First approved Pip game-idea sandbox. Pip may read project notes, configs, and builder source, and may only write draft artifacts under docs/pip-drafts.",
       "readable_paths": [
         "README.md",

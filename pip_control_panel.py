@@ -534,7 +534,30 @@ def page(status: dict[str, Any]) -> str:
     if not beliefs and not rules:
         self_model_html = "<p class='small' style='color:var(--text-muted);'>No beliefs or rules have been extracted yet.</p>"
 
-    
+    handoffs_dir = pip_platform.BRAIN_ROOT / "01_agent_context" / "handoffs"
+    summaries = sorted(handoffs_dir.glob("@CLAUDE_Night_School_*.txt"))
+    night_school_html = ""
+    if summaries:
+        try:
+            ns_sum = summaries[-1].read_text(encoding="utf-8")
+            ns_sum_html = "<br>".join(html.escape(line) for line in ns_sum.splitlines()[:15])
+            night_school_html += f"<p class='small' style='margin:0 0 4px 0;'><strong>Latest Summary ({summaries[-1].name})</strong></p><div class='small' style='font-family:monospace;background:rgba(255,255,255,.06);padding:8px;border-radius:8px;margin-bottom:8px;'>{ns_sum_html}</div>"
+        except Exception:
+            pass
+            
+    discoveries_dir = pip_platform.BRAIN_ROOT / "07_thought_models_research" / "pip_discoveries"
+    discoveries = sorted(discoveries_dir.glob("discovery_*.md"))
+    if discoveries:
+        try:
+            disc = discoveries[-1].read_text(encoding="utf-8")
+            disc_html = "<br>".join(html.escape(line) for line in disc.splitlines()[:20])
+            night_school_html += f"<p class='small' style='margin:0 0 4px 0;'><strong>Latest Free Play ({discoveries[-1].name})</strong></p><div class='small' style='font-family:monospace;background:rgba(255,255,255,.06);padding:8px;border-radius:8px;'>{disc_html}</div>"
+        except Exception:
+            pass
+            
+    if not night_school_html:
+        night_school_html = "<p class='small' style='color:var(--text-muted);'>No Night School logs found.</p>"
+
     # --- Pre-computations for Template ---
     dashboard_token = html.escape(PipHandler.dashboard_token)
     escaped_memory_path = html.escape(str(memory_path))
@@ -1250,6 +1273,23 @@ class PipHandler(BaseHTTPRequestHandler):
                         status=trace_status,
                         details={"goal": goal_text[:240], "allowed": assessment["allowed"]},
                     )
+                self.redirect_home()
+            elif parsed.path == "/night-school/run":
+                # This should run in the background so it doesn't block the UI
+                import threading
+                import subprocess
+                ns_script = Path(__file__).resolve().parent / "pip_night_school.py"
+                
+                def _run_ns():
+                    subprocess.run(
+                        [sys.executable, str(ns_script)],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        **pip_platform.hidden_subprocess_kwargs()
+                    )
+                    
+                threading.Thread(target=_run_ns, daemon=True).start()
+                self.trace_dashboard_action("night_school_run", "Dashboard manually triggered Night School.")
                 self.redirect_home()
             elif parsed.path == "/nightwatch/start":
                 request_safety_permission(

@@ -1,0 +1,29 @@
+{
+  "name": "llama",
+  "app_name": "Llama (Ollama)",
+  "window_title": "",
+  "description": "Local API hook for Ollama's Llama 3.2 model.",
+  "shell_type": "api_chat",
+  "safety_mode": "auto",
+  "aliases": [
+    "llama3",
+    "ollama"
+  ],
+  "capabilities": [
+    "Background Chat",
+    "Local AI"
+  ],
+  "handoff_guidance": [
+    "Use for fast, secure, offline chat threads managed directly from the phone."
+  ],
+  "macros": {
+    "submit_task": [
+      {
+        "action": "trigger_nap"
+      },
+      {
+        "action": "api_chat"
+      }
+    ]
+  }
+}

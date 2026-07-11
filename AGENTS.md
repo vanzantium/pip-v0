@@ -19,6 +19,7 @@
 - Keep Nightwatch inward-facing and Weekly Update outward-facing; neither may silently broaden the other's permissions.
 - Runtime/private data belongs under configured Pip memory or ignored paths, not tracked source files.
 - Prefer small reversible modules and explicit skill metadata over hidden cross-module behavior.
+- `pip_task_monitor.py` may terminate ONLY Pip's own research child (the PID in `imports/_research_status.json`); all other process findings are draft-first reports, never actions.
 
 ## Work Guidance
 

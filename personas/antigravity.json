@@ -28,15 +28,10 @@
     ],
     "submit_task": [
       {
-        "action": "focus_window"
+        "action": "trigger_nap"
       },
       {
-        "action": "type_text",
-        "source": "task_input"
-      },
-      {
-        "action": "press_key",
-        "key": "enter"
+        "action": "antigravity_api"
       }
     ]
   }

@@ -1,0 +1,41 @@
+{
+  "name": "opencode",
+  "app_name": "OpenCode",
+  "window_title": "opencode",
+  "description": "OpenCode terminal AI coding agent. Non-interactive mode (opencode run) IS real and documented - but it requires the OpenCode CLI BINARY, not the Electron desktop .exe (which just opens the GUI when passed args).",
+  "shell_type": "developer_tool",
+  "safety_mode": "approval_required_for_ui_handoff",
+  "invoke": "subprocess_headless",
+  "aliases": ["opencode", "open code", "oc"],
+  "status": "active",
+  "binary_note": "The installed desktop app (C:\\Users\\<user>\\AppData\\Local\\Programs\\@opencode-aidesktop\\OpenCode.exe) is the Electron GUI - passing 'run' args to it opens a window, not headless output. The CLI is a SEPARATE binary: install via 'curl -fsSL https://opencode.ai/install | bash' (or npm/bun/brew), giving a real 'opencode' command. The desktop app may also bundle it under its resources/app.asar.unpacked/node_modules - if found, point cmd_bin at that opencode(.exe/.cmd). Set cmd_bin below before enabling.",
+  "cmd_bin": "opencode.cmd",
+  "capabilities": [
+    "Headless task run with captured JSON output",
+    "Read-only 'plan' via a permission-scoped agent",
+    "Path-confined edits (only via an approved workspace + approved agent)"
+  ],
+  "headless": {
+    "cmd_plan": ["{cmd_bin}", "run", "--format", "json", "--agent", "pip-readonly", "--dir", "{workspace}", "{task}"],
+    "cmd_build": ["{cmd_bin}", "run", "--format", "json", "--agent", "pip-build", "--dir", "{workspace}", "--auto", "{task}"],
+    "flag_notes": "CORRECTED from first draft: JSON output is --format json (NOT -f json; -f/--file attaches files). There is NO --mode flag on 'run' - safe read-only behavior comes from a permission-scoped AGENT, not a mode flag. --auto auto-approves permissions (build only). --dir confines the working directory.",
+    "setup_agents": [
+      "opencode agent create --path .opencode/agent --description 'Pip read-only planner' --mode subagent --permissions read,grep,glob,webfetch",
+      "opencode agent create --path .opencode/agent --description 'Pip scoped builder' --mode subagent --permissions read,grep,glob,edit,bash"
+    ],
+    "note": "The read-only agent DENIES edit+bash (anything omitted from --permissions is denied), so even with --auto it cannot write or run commands - that is the real safe 'plan' guarantee, stronger than a mode flag."
+  },
+  "handoff_guidance": [
+    "REQUIRES the opencode CLI binary - the desktop .exe will not do headless. Confirm cmd_bin resolves before enabling.",
+    "Default to the pip-readonly agent (read/grep/glob/webfetch only): captured output, no writes, fully reversible.",
+    "The pip-build agent (adds edit+bash) plus --auto can write and run commands unsupervised - only inside an approved --dir workspace AND behind an explicit human-approved handoff.",
+    "Capture stdout (--format json), summarize in Pip's voice, text the result - like the deep-research bridge."
+  ],
+  "macros": {
+    "focus_only": [{"action": "focus_window"}],
+    "submit_task": [
+      {"action": "trigger_nap"},
+      {"action": "execute_opencode", "agent": "pip-readonly", "source": "task_input"}
+    ]
+  }
+}

@@ -29,6 +29,8 @@ This prototype focuses on the real moat:
 - `pip_prompt_guard.py` - prompt-injection preflight guard for chat/tool admission
 - `pip_tool_memory.py` - tool-scoped durable safety and operating rules
 - `pip_traces.py` - append-only trace spine for CLI, dashboard, Flow Master, and handoff events
+- `pip_task_monitor.py` - research watchdog + process inventory + draft-first waste report (auto-acts only on Pip's own research child)
+- `pip_deep_research.py` - three-mode research engine: external (DuckDuckGo + Internet Archive + Semantic Scholar), internal (brain map + filename navigation + loom + corpus text), full (both, compiled). Modes via --mode or topic prefixes ('web:', 'local:'). All sources circuit-breaker guarded.
 - `pip_task_runs.py` - append-only task-run receipts for scheduler, Nightwatch, and background scripts
 - `pip_system_manifest.py` - compact self-map of Pip primitives, roots, safety contract, and control surfaces
 - `pip_model_registry.py` - lightweight task-to-local-model fit scoring

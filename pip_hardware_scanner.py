@@ -144,7 +144,29 @@ def get_vram_mb() -> int:
     except Exception:
         return 0
 
-def get_ollama_recommendation(ram_gb: float) -> dict:
+def detect_vulkan_support() -> bool:
+    """Check if Vulkan is supported on this machine."""
+    if pip_platform.is_windows():
+        try:
+            # Check for Vulkan DLL in system32
+            has_dll = os.path.exists(os.path.join(os.environ.get('WINDIR', 'C:\\Windows'), 'System32', 'vulkan-1.dll'))
+            if has_dll:
+                return True
+            output = subprocess.check_output("vulkaninfo", shell=True, stderr=subprocess.STDOUT, text=True, timeout=5)
+            return "Vulkan Instance Version" in output
+        except Exception:
+            return False
+    elif pip_platform.is_macos():
+        return False
+    elif pip_platform.is_linux():
+        try:
+            output = subprocess.check_output(["vulkaninfo"], stderr=subprocess.STDOUT, text=True, timeout=5)
+            return "Vulkan Instance Version" in output
+        except Exception:
+            return False
+    return False
+
+def get_ollama_recommendation(ram_gb: float, vulkan_supported: bool = False) -> dict:
     if ram_gb < 8.0:
         return {
             "model": "qwen2:0.5b or gemma:2b",
@@ -160,12 +182,20 @@ def get_ollama_recommendation(ram_gb: float) -> dict:
             "prompt_strategy": "Hermes/Pi Strategy: Maintain strict persona and utilize grammar-constrained generation for guaranteed JSON outputs."
         }
     else:
-        return {
-            "model": "llama3:8b or mistral",
-            "tier": "Performance",
-            "reason": f"You have ample memory ({ram_gb:.1f} GB). You can run powerful 8B parameter models for maximum zero-shot reasoning capabilities.",
-            "prompt_strategy": "Standard ReAct Strategy: Model is large enough to handle multi-step agentic pipelines in a single pass."
-        }
+        model = "llama3:8b or mistral"
+        tier = "Performance"
+        reason = f"You have ample memory ({ram_gb:.1f} GB). You can run powerful 8B parameter models for maximum zero-shot reasoning capabilities."
+        prompt_strategy = "Standard ReAct Strategy: Model is large enough to handle multi-step agentic pipelines in a single pass."
+
+    if vulkan_supported:
+        reason += " Hardware-agnostic Vulkan backend is supported, allowing high-performance execution across any GPU without requiring CUDA."
+
+    return {
+        "model": model,
+        "tier": tier,
+        "reason": reason,
+        "prompt_strategy": prompt_strategy
+    }
 
 def optimize_system_memory() -> bool:
     if not pip_platform.is_windows():
@@ -208,6 +238,7 @@ def scan_and_save(optimize: bool = False) -> dict:
     """
     optimized = optimize_system_memory() if optimize else False
     ram = get_ram_gb()
+    vulkan_supported = detect_vulkan_support()
     
     report = {
         "cpu": get_cpu_name(),
@@ -215,9 +246,10 @@ def scan_and_save(optimize: bool = False) -> dict:
         "vram_mb": get_vram_mb(),
         "ram_gb": round(ram, 1),
         "os": platform.system() or "Unknown",
+        "vulkan_supported": vulkan_supported,
         "memory_optimized": optimized,
         "memory_optimization_requested": optimize,
-        "recommendation": get_ollama_recommendation(ram)
+        "recommendation": get_ollama_recommendation(ram, vulkan_supported)
     }
     
     memory_path = pip_config.get_memory_path()

@@ -1,0 +1,22 @@
+{
+  "queries": [
+    "local LLM agent long term memory",
+    "personal knowledge base AI assistant",
+    "second brain AI notes retrieval",
+    "AI agent orchestration persona",
+    "opencode agent",
+    "ollama agent framework tools",
+    "retrieval augmented generation local",
+    "self-improving AI agent memory ledger",
+    "multi-agent handoff coding assistant",
+    "plant identification machine learning",
+    "knowledge graph note linking AI",
+    "on-device AI assistant privacy"
+  ],
+  "pushed_within_days": 30,
+  "per_query": 5,
+  "max_report": 12,
+  "min_stars": 0,
+  "seen_cap": 2000,
+  "_note": "Queries drive Pip's daily GitHub scan. Edit freely - the scout reloads this each run. Keep them aligned with what the ecosystem is actually building so the digest stays relevant to Claude's build sessions."
+}

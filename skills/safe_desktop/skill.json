@@ -1,0 +1,18 @@
+{
+  "skills": {
+    "get_active_window": {
+      "name": "get_active_window",
+      "description": "Read the title of the user's currently active desktop window to know what they are working on (Telemetry Eyes). Zero lag.",
+      "inputs": [],
+      "outputs": ["window title text"],
+      "permissions": ["safe desktop telemetry"]
+    },
+    "take_snapshot": {
+      "name": "take_snapshot",
+      "description": "Take a single static screenshot of the desktop to visually parse the screen state (Snapshot Vision). Only executes if system is not lagging.",
+      "inputs": [],
+      "outputs": ["snapshot description or text"],
+      "permissions": ["safe desktop snapshot"]
+    }
+  }
+}

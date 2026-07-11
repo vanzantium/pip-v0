@@ -89,7 +89,7 @@ def _export(events: list) -> None:
             pass
     combined = existing + events
     path.write_text(json.dumps(combined, indent=2), encoding="utf-8")
-    print(f"[tracker] exported {len(events)} events → {path.name}")
+    print(f"[tracker] exported {len(events)} events -> {path.name}")
 
 
 def _post(events: list) -> None:

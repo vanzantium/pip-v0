@@ -14,9 +14,17 @@ imports/s25_*.json
 imports/phone_bridge_status.json
 imports/gmail_*.json
 imports/gmail_*.csv
+imports/_*.json
+imports/_*.txt
+00_meta_index/
+.graph_memory.db
+preflight_output.txt
 
 # Runtime configuration containing personal paths
 config.json
+pip_secrets.json
+.opencode/
+imports/phone_drop/
 
 # Runtime database
 *.sqlite

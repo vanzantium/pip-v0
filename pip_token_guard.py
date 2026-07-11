@@ -38,6 +38,7 @@ INTENT_MULTIPLIERS = {
     "skill": 1.2,
     "sieve": 0.7,
     "reword": 0.6,
+    "research": 2.0,
 }
 
 # Builtin (in-repo) sieve patterns. Word-boundary matched so ordinary words
@@ -229,6 +230,8 @@ def _nudge_for(mode: str, action: str, intent: str, estimated: int) -> str:
         return "This is a large request. Pip should condense context before spending more tokens."
     if intent == "autonomous_goal":
         return "Autonomous work is higher-cost. Queue approval and keep the first job narrow."
+    if intent == "research":
+        return "Deep research consumes more budget per run. Pip should batch her queries."
     return "Budget looks healthy. Proceed normally, but keep outputs purposeful."
 
 
@@ -354,8 +357,13 @@ def status() -> dict[str, Any]:
     used = int(state.get("daily_used_tokens", 0))
     remaining = max(0, daily_budget - used)
     remaining_ratio = remaining / daily_budget
-    pressure = 1.0 - remaining_ratio
-    mode = _mode_for_pressure(pressure, remaining_ratio)
+    last_assessment = state.get("last_assessment")
+    if last_assessment:
+        pressure = last_assessment.get("pressure", 1.0 - remaining_ratio)
+        mode = last_assessment.get("mode", _mode_for_pressure(pressure, remaining_ratio))
+    else:
+        pressure = 1.0 - remaining_ratio
+        mode = _mode_for_pressure(pressure, remaining_ratio)
     return {
         "generated_at": utc_now(),
         "mode": mode,

@@ -12,6 +12,10 @@ def generate_system_prompt(thermal_state=None, rag_context: str = "", role_overr
         prompt_parts.append(role_override)
     else:
         prompt_parts.append(model.get("core_identity", "You are Pip."))
+        prompt_parts.append("SYSTEM ARCHITECTURE AWARENESS: You are an autonomous LLM agent wrapped in a Python OS shell. Your shell handles tasks automatically (Token Guard manages compute, Flow Master regulates pressure, Waking Loop processes memory, and Phone Relay sends your text to the user's phone via ntfy).")
+        prompt_parts.append("IMPORTANT CONSTRAINT: Because you communicate via phone notifications, keep your responses concise (under 250 characters when possible). Do not cut off mid-sentence. You can use multiple short messages if necessary.")
+        
+    prompt_parts.append("DOCTRINE: Retrieve before you reason. Route what's above your weight. Capture every miss. Be dumb, be cheap, be effective - the system makes you look smart.")
 
     # 2. Dynamic State (Thermal)
     if thermal_state:
@@ -31,7 +35,25 @@ def generate_system_prompt(thermal_state=None, rag_context: str = "", role_overr
         for r in rules:
             prompt_parts.append(f"- {r}")
 
-    # 5. RAG Context (Recent Memory / relevant dreams)
+    # 5. Research Protocol
+    prompt_parts.append("RESEARCH PROTOCOL:")
+    prompt_parts.append("- If you do not know the answer to a factual question, explicitly state that you are unsure.")
+    prompt_parts.append("- Offer to run a deep research cycle, and tell the user they can trigger it by replying with `@research [topic]`.")
+
+    # 6. Available Personas (Tavern)
+    try:
+        import pip_personas
+        personas = pip_personas.load_personas()
+        if personas:
+            prompt_parts.append("AVAILABLE PERSONAS (THE TAVERN):")
+            prompt_parts.append("You can hand off tasks to these personas by replying with `@persona_name [task]`.")
+            unique_names = set(p["name"] for p in personas.values())
+            for n in unique_names:
+                prompt_parts.append(f"- @{n.lower()}")
+    except Exception as e:
+        pass
+
+    # 7. RAG Context (Recent Memory / relevant dreams)
     if rag_context:
         prompt_parts.append("Recent Memories / Context:")
         prompt_parts.append(rag_context.strip())

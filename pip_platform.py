@@ -8,7 +8,7 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parent
-BRAIN_ROOT = Path(os.environ.get("PIP_BRAIN_ROOT", ROOT.parent)).expanduser().resolve()
+BRAIN_ROOT = Path(os.environ.get("PIP_BRAIN_ROOT", ROOT.parent.parent.parent.parent)).expanduser().resolve()
 
 
 def system_name() -> str:

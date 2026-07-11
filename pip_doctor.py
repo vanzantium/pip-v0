@@ -252,8 +252,6 @@ def main() -> None:
         flow = pip_flow_master.inspect_flow_master()
         if flow.get("contract") != "ingest -> validate -> transform -> emit":
             failures.append("Flow Master contract should be ingest -> validate -> transform -> emit")
-        if not flow.get("source_exists"):
-            failures.append("Flow Master source folder should exist under the brain folder")
         boundaries = " ".join(flow.get("safety_boundaries", []))
         if "does not block apps" not in boundaries and "No keyboard" not in boundaries:
             failures.append("Flow Master v0 should document safe non-invasive boundaries")

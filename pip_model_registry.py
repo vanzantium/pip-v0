@@ -14,18 +14,18 @@ def registry_path() -> Path:
 
 def _default_registry() -> dict[str, dict[str, Any]]:
     return {
-        "qwen2.5:0.5b": {
-            "vram_cost_mb": 500,
+        "phi3:mini": {
+            "vram_cost_mb": 2200,
             "strengths": ["formatting", "fast_replies", "json_extraction"],
             "max_context": 8192
         },
-        "llama3.2:1b": {
-            "vram_cost_mb": 1000,
+        "llama3.2:latest": {
+            "vram_cost_mb": 2000,
             "strengths": ["simple_reasoning", "chat"],
             "max_context": 8192
         },
-        "llama3:8b": {
-            "vram_cost_mb": 4500,
+        "gemma4:e4b": {
+            "vram_cost_mb": 9600,
             "strengths": ["coding", "complex_reasoning", "summarization"],
             "max_context": 8192
         }
@@ -155,7 +155,7 @@ def route_task(task_type: str) -> str:
     if ranked:
         return ranked[0]["model"]
     
-    return "qwen2.5:0.5b"
+    return "phi3:mini"
 
 def run_route(args: argparse.Namespace) -> dict[str, Any]:
     task = args.task_type or "chat"
